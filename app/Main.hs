@@ -1,3 +1,4 @@
+{-#language OverloadedStrings#-}
 {-#language TemplateHaskell#-}
 module Main where
 import           Options.Applicative
@@ -14,20 +15,54 @@ import           Path.IO                       as Dir
 data Commands
   = AddLinks FilePath (Maybe Text)
   | Extend FilePath Text (Maybe Text)
-  | BuildClique (Maybe Text)
+  | BuildClique CliqueType (Maybe Text)
   | Find (Maybe Text)
-  | Create Text
+  | Create Text CreateLinks
   deriving (Eq, Show)
 
+data CliqueType = CliqueZettel Text | CrossLink
+    deriving (Eq,Show)
+
+data CreateLinks = DontAddLinks | DoAddLinks | AddLinksKeyword Text
+ deriving (Eq,Show)
+
 cmdClique :: Parser Commands
-cmdClique = BuildClique <$> optional
-  (strArgument
-    (help "Search term for selecting Clique members" <> metavar "ZETTEL")
-  )
+cmdClique =
+  BuildClique
+    <$> (   flag'
+            CrossLink
+            (  long "crosslink"
+            <> help "Crosslink zettels directly without creating a new one"
+            )
+        <|> (   CliqueZettel
+            <$> strOption
+                  (  long "title"
+                  <> help "Title for zettel describing the clique"
+                  )
+            )
+        )
+    <*> optional
+          (strArgument
+            (help "Search term for selecting Clique members" <> metavar "KEYWORD"
+            )
+          )
 
 cmdCreate :: Parser Commands
-cmdCreate = Create <$> strOption
-  (long "title" <> help "Title for the new zettel" <> metavar "ZETTEL")
+cmdCreate =
+  Create
+    <$> strOption
+          (long "title" <> help "Title for the new zettel" <> metavar "ZETTEL")
+    <*> (   (AddLinksKeyword <$> strOption
+              (  long "search"
+              <> help "Search for links to add to the new zettel"
+              <> metavar "KEYWORD"
+              )
+            )
+        <|> (flag DontAddLinks
+                  DoAddLinks
+                  (long "dolink" <> help "Add links without searching")
+            )
+        )
 
 cmdAddLinks :: Parser Commands
 cmdAddLinks =
@@ -112,17 +147,35 @@ main = do
       links <- keywordSearch zettelkasten maybeKeyword
       traverse_ (linkToFile zettelkasten >=> toFilePath .> putStrLn) links
 
-    BuildClique maybeKeyword -> do
+    BuildClique cliqueType maybeKeyword -> do
       links <- keywordSearch zettelkasten maybeKeyword
-      let addCliqueLinks lnk = do
+      case cliqueType of
+        CrossLink -> do
+          for_ links $ \lnk -> do
             zettel <- loadZettel zettelkasten (linkTarget lnk)
             fmap (addLinks (filter (/= lnk) links)) zettel
               |> saveZettel zettelkasten
-      traverse_ addCliqueLinks links
 
-    Create title -> do
+        CliqueZettel title -> do
+          cliqueZettel <- create title
+          fmap (addLinks links) cliqueZettel |> saveZettel zettelkasten
+          for_ links $ \lnk -> do
+            linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
+            fmap (addLinks [Link (name cliqueZettel) (Just "Clique link")])
+                 linkedZettel
+              |> saveZettel zettelkasten
+            linkToFile zettelkasten (linkTo cliqueZettel) >>= toFilePath .> putStrLn
+
+
+    Create title doAddLinks -> do
       zettel <- create title
-      saveZettel zettelkasten zettel
+      lnks   <- case doAddLinks of
+        DontAddLinks       -> pure Nothing
+        DoAddLinks         -> Just <$> keywordSearch zettelkasten Nothing
+        AddLinksKeyword kw -> Just <$> keywordSearch zettelkasten (Just kw)
+      saveZettel zettelkasten $ case lnks of
+            Nothing -> zettel
+            Just someLinks -> addLinks someLinks <$> zettel
       linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
 
 -- UTILS
@@ -157,7 +210,7 @@ rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
         Just keyword -> ["-l", toString keyword]
       fzfOpts = ["--multi", "--preview", "cat {}"]
   (ec, out) <- withProcessTerm_
-    (proc "rg" rgOpts |> setStdout createPipe )
+    (proc "rg" rgOpts |> setStdout createPipe)
     (\p ->
       proc "fzf" fzfOpts
         |> setStdin (getStdout p |> useHandleClose)
