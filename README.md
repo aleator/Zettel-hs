@@ -20,7 +20,7 @@ Available options:
   -h,--help                Show this help text
 
 Available commands:
-  create                   Create unlnked zettel
+  create                   Create unlinked zettel
   link                     Link zettels
   extend                   Create new zettel and link it to original
   find                     Find zettels
@@ -31,16 +31,17 @@ For further details, pass `--help` as argument for each command (e.g., `Zettel l
 
 ## Vim integration
 
-There isn't one, but you can easily use Zettel from vim. For example
+There isn't one, but you can use Zettel from Vim. For example:
 
-* Add links for current note, do do `:term Zettel link -- --origin %:t --search <keyword>`
+* Add links for current note, do `:term Zettel link -- --origin %:t --search <keyword>`
 
 * Extend a note, e.g.,  create and link to previous, do
   `:!Zettel extend -- --origin %:t --title <new-title>`
 
 ## Shell integration
 
-There isn't a shell integration either. Here are some common things you might do:
+There isn't a shell integration either. Here are some common commands
+you might use:
 
 * To edit zettels you could do `Zettel find --search <term>|xargs -o nvim -O`
 
@@ -51,10 +52,11 @@ There isn't a shell integration either. Here are some common things you might do
 You need to install the excellent [`fzf`](https://github.com/junegunn/fzf) and
 [`rg`](https://github.com/BurntSushi/ripgrep) programs first. 
 
-Then install [stack](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then clone this
-repository and issue `stack install` inside the repository. Then go have a coffee and a sandwich
-while the program builds.
+Then install
+[stack](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then
+clone this repository and issue `stack install` inside the repository. Then go
+have a coffee and a sandwich while the program builds.
 
-Finally,, create the directory `~/zettel/` and create your first zettel by
-`Zettel create --title <title>|xargs -o nvim`.
+After the program has been built, create the directory `~/zettel/` and
+create your first zettel by `Zettel create --title <title>|xargs -o nvim`.
 
