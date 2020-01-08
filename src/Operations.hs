@@ -11,7 +11,7 @@ import qualified Data.Text as T
 data Named a = Named {name :: Text, namedValue :: a}
  deriving (Show,Functor)
 
-linkTo named = Link (name named) Nothing
+linkTo named = Link (name named) Nothing Nothing
 
 mkName :: Text -> IO Text
 mkName title = do
@@ -27,6 +27,6 @@ addLinks lnks zettel = zettel{links = ordNub (links zettel++lnks)}
 
 createLinked (Named start zettel) relation newTitle = do
     newName <- mkName newTitle
-    let zettelNew = Zettel newTitle mempty mempty [ Link start (Just "Origin") ]
-    let zettelUpdated = addLinks [Link newName relation] zettel
+    let zettelNew = Zettel newTitle mempty mempty [ Link start (Just "Origin") Nothing ]
+    let zettelUpdated = addLinks [Link newName relation Nothing] zettel
     pure (Named start zettelUpdated, Named newName zettelNew)

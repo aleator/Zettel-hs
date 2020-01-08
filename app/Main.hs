@@ -161,7 +161,7 @@ main = do
           fmap (addLinks links) cliqueZettel |> saveZettel zettelkasten
           for_ links $ \lnk -> do
             linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
-            fmap (addLinks [Link (name cliqueZettel) (Just "Clique link")])
+            fmap (addLinks [Link (name cliqueZettel) (Just "Clique link") Nothing])
                  linkedZettel
               |> saveZettel zettelkasten
             linkToFile zettelkasten (linkTo cliqueZettel) >>= toFilePath .> putStrLn
@@ -197,7 +197,7 @@ fileSystemZK basedir = ZettelKasten
   (rgFind basedir)
   (fileSystemLinkToFile basedir)
 
-fileSystemLinkToFile baseDir (Link lnk _) = do
+fileSystemLinkToFile baseDir (Link lnk _ _) = do
   file <- parseRelFile (toString lnk)
   pure (baseDir </> file)
 
@@ -220,7 +220,7 @@ rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
         Nothing   -> Nothing
         Just path -> path |> filename |> toFilePath |> Just
   pure
-    [ Link (toText lnk) Nothing
+    [ Link (toText lnk) Nothing Nothing
     | lnk <- toStrict out |> decodeUtf8 |> lines |> mapMaybe filePathToLink
     ]
 

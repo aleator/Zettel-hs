@@ -11,7 +11,9 @@ import qualified Data.Char                     as Char
 
 import           System.Directory
 
-data Link = Link {linkTarget::Text, description :: Maybe Text}
+data Link = Link {linkTarget::Text
+                 ,description :: Maybe Text
+                 ,refNo :: Maybe Text}
     deriving (Generic,Show,Eq,Ord)
 
 data Zettel = Zettel {title :: Text
@@ -50,15 +52,24 @@ word n = do
   when (w == separatorLine) (fail "Unexpected Separator")
   pure w
 
+refId :: Parsec Void Text Text
+refId = do
+  "["
+  w <- takeWhile1P (Just "ref-id") (Char.isAlphaNum) --TODO
+  "]:"
+  linespace
+  pure w
+
 parseLinks = 
   "Links:" *> linespace *> newline *> Text.Megaparsec.many (link <* newline)
 
 emptyLine = linespace <* newline
 
-link =
-  Link
-    <$> try (word "Link")
-    <*> optional (takeWhile1P (Just "Link description") (/= '\n'))
+link = do 
+    ref <- optional refId
+    link <- try (word "Link")
+    desc <- optional (takeWhile1P (Just "Link description") (/= '\n'))
+    pure (Link link desc ref)
 
 
 runZettelParser :: FilePath -> Text -> Either String Zettel
@@ -69,9 +80,9 @@ zettel :: Parsec Void Text Zettel
 zettel = do
   title <- parseLine <* parseSeparator <* newline
   skipMany emptyLine
-  body <-
-    unlines <$> someTill (try parseLine <|> (newline $> "")) parseSeparator
-  newline
+  body <- optional 
+    (unlines <$> Text.Megaparsec.some (try parseLine <|> (newline $> "")))
+  parseSeparator<*newline
   tags <- parseTags
   newline
   links <- parseLinks
@@ -79,7 +90,7 @@ zettel = do
   parseSeparator
   space
   takeRest
-  pure (Zettel title body tags links)
+  pure (Zettel title (fromMaybe "" body) tags links)
 
 pprZettel :: Zettel -> Text
 pprZettel zettel =
@@ -99,8 +110,9 @@ pprZettel zettel =
     <> "Links: "
     <> "\n"
     <> unlines
-         [ maybe lnk (\d -> lnk <> " " <> d) desc
-         | Link lnk desc <- links zettel
+         [  maybe "" (\ref -> "["<>ref<>"]: ") ref
+            <> maybe lnk (\d -> lnk <> " " <> d) desc
+         | Link lnk desc ref <- links zettel
          ]
     <> separatorLine
 
@@ -110,8 +122,9 @@ tst = do
   setCurrentDirectory "/Users/aleator/zettel/"
   ts <- traverse readFileText files
   mapM_
-    (\(n, x) -> print n >> case parse zettel n x of
-      Left  e -> print e
+    (\(n, x) -> case parse zettel n x of
+      Left  e -> putStrLn (errorBundlePretty  e)
       Right v -> putTextLn (pprZettel v)
+                 --pass
     )
     (zip files ts)
