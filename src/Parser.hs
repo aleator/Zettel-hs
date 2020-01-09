@@ -44,7 +44,9 @@ parseTags = do
   sepBy (tag <* linespace) ("," <* linespace) -- <* newline
 
 linespace :: Parsec Void Text ()
-linespace = skipMany (satisfy (\x -> Char.isSpace x && x /= '\n'))
+linespace = skipMany (satisfy nonLinebreakingSpace)
+
+nonLinebreakingSpace c = Char.isSpace c && c /= '\n' -- TODO: Other linebreaks?
 
 word :: String -> Parsec Void Text Text
 word n = do
@@ -55,7 +57,8 @@ word n = do
 refId :: Parsec Void Text Text
 refId = do
   "["
-  w <- takeWhile1P (Just "ref-id") (Char.isAlphaNum) --TODO
+  w <- takeWhile1P (Just "ref-id") 
+                   (\c -> Char.isAlphaNum c || nonLinebreakingSpace c) --TODO
   "]:"
   linespace
   pure w
