@@ -17,14 +17,39 @@ data Commands
   | Extend FilePath Text (Maybe Text)
   | BuildClique CliqueType (Maybe Text)
   | Find (Maybe Text)
+  -- | UpdateIndex
   | Create Text CreateLinks
+  | ExportAsJSON WhatToExport
   deriving (Eq, Show)
+
+-- data HowToFind = KeywordSearch (Maybe Text
+
+data WhatToExport = ExportAll | ExportSearch (Maybe Text)
+    deriving (Eq,Show)
 
 data CliqueType = CliqueZettel Text | CrossLink
     deriving (Eq,Show)
 
 data CreateLinks = DontAddLinks | DoAddLinks | AddLinksKeyword Text
  deriving (Eq,Show)
+
+cmdExport :: Parser Commands
+cmdExport =
+  ExportAsJSON
+    <$> (   flag'
+             ExportAll 
+            (  long "all"
+            <> help "Export all zettels"
+            )
+        <|> (   ExportSearch
+            <$> optional (strOption
+                  (  long "search"
+                  <> metavar "KEYWORD"
+                  <> help "Search for zettels to export"
+                  ))
+            )
+        )
+        
 
 cmdClique :: Parser Commands
 cmdClique =
@@ -93,7 +118,7 @@ cmdCommands =
   subparser
       (command
         "create"
-        (info (cmdCreate <**> helper) (progDesc "Create unlnked zettel"))
+        (info (cmdCreate <**> helper) (progDesc "Create unlinked zettel"))
       )
     <|> subparser
           (command "link"
@@ -114,6 +139,13 @@ cmdCommands =
             "clique"
             (info (cmdClique <**> helper)
                   (progDesc "Build cliques by cross linking selected zettels")
+            )
+          )
+    <|> subparser
+          (command
+            "export"
+            (info (cmdExport <**> helper)
+                  (progDesc "Export zettels as JSON")
             )
           )
 
@@ -166,7 +198,6 @@ main = do
               |> saveZettel zettelkasten
             linkToFile zettelkasten (linkTo cliqueZettel) >>= toFilePath .> putStrLn
 
-
     Create title doAddLinks -> do
       zettel <- create title
       lnks   <- case doAddLinks of
@@ -178,6 +209,17 @@ main = do
             Just someLinks -> addLinks someLinks <$> zettel
       linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
 
+    ExportAsJSON whatToExport -> do
+        links <- case whatToExport of
+            ExportAll -> listZettels zettelkasten
+            ExportSearch maybeKeyword -> 
+                keywordSearch zettelkasten maybeKeyword
+        -- TODO: Note that this is object/line format
+        for_ links $ \lnk -> do
+            zettel <- loadZettel zettelkasten (linkTarget lnk)
+            putLTextLn (exportAsJSON zettel)
+                
+
 -- UTILS
 
 data ZettelKasten = ZettelKasten
@@ -186,6 +228,7 @@ data ZettelKasten = ZettelKasten
     ,loadZettel    :: Text -> IO (Named Zettel)
     ,keywordSearch :: Maybe Text -> IO [Link]
     ,linkToFile    :: Link -> IO (Path Abs File)
+    ,listZettels   :: IO [Link]
     }
 
 fileSystemZK basedir = ZettelKasten
@@ -196,6 +239,16 @@ fileSystemZK basedir = ZettelKasten
   (\uuid -> Named uuid <$> readZettel uuid)
   (rgFind basedir)
   (fileSystemLinkToFile basedir)
+  (findZettelFiles basedir)
+
+findZettelFiles basedir = do
+  (_,files) <- listDir basedir
+
+  let filePathToLink = filename .> toFilePath .> toLink
+      toLink ident = Link (toText ident) Nothing Nothing
+
+  pure [filePathToLink f | f <- files
+       ,not ("."` isPrefixOf` toFilePath (filename f))] 
 
 fileSystemLinkToFile baseDir (Link lnk _ _) = do
   file <- parseRelFile (toString lnk)

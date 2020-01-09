@@ -1,5 +1,6 @@
 {-#LANGUAGE DeriveGeneric#-}
 {-#LANGUAGE OverloadedStrings#-}
+{-#LANGUAGE DeriveAnyClass#-}
 module Parser where
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -8,19 +9,20 @@ import qualified Data.Text                     as T
 import qualified Data.Text.IO                  as T
 import           Data.Void
 import qualified Data.Char                     as Char
+import qualified Data.Aeson as Aeson
 
 import           System.Directory
 
 data Link = Link {linkTarget::Text
                  ,description :: Maybe Text
                  ,refNo :: Maybe Text}
-    deriving (Generic,Show,Eq,Ord)
+    deriving (Generic,Show,Eq,Ord,Aeson.ToJSON,Aeson.FromJSON)
 
 data Zettel = Zettel {title :: Text
                      ,body :: Text
                      ,tags :: [Text]
                      ,links :: [Link]}
-    deriving (Generic,Show)
+    deriving (Generic,Show,Aeson.ToJSON,Aeson.FromJSON)
 
 parseSeparator :: Parsec Void Text ()
 parseSeparator = separatorLine $> ()
@@ -127,7 +129,7 @@ tst = do
   mapM_
     (\(n, x) -> case parse zettel n x of
       Left  e -> putStrLn (errorBundlePretty  e)
-      Right v -> putTextLn (pprZettel v)
-                 --pass
+      Right v -> --putTextLn (pprZettel v)
+                 pass
     )
     (zip files ts)
