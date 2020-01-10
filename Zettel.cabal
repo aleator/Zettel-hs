@@ -37,16 +37,20 @@ library
 executable Zettel
   hs-source-dirs:      app
   main-is:             Main.hs
+  extra-source-files:  tantivy_meta.json
   default-language:    Haskell2010
   build-depends:       base-noprelude >= 4.7 && < 5
                      , Zettel
                      , flow
                      , path
                      , path-io
+                     , file-embed
+                     , bytestring
                      , text
                      , directory
                      , containers
                      , relude
                      , typed-process
                      , optparse-applicative
+                     , aeson
 
