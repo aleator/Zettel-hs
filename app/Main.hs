@@ -143,37 +143,23 @@ cmdFind =
 
 cmdCommands :: Parser Commands
 cmdCommands =
-  subparser
-      (command
-        "create"
-        (info (cmdCreate <**> helper) (progDesc "Create unlinked zettel"))
-      )
-    <|> subparser
-          (command "link"
-                   (info (cmdAddLinks <**> helper) (progDesc "Link zettels"))
-          )
-    <|> subparser
-          (command
-            "extend"
-            (info (cmdExtend <**> helper)
-                  (progDesc "Create new zettel and link it to original")
-            )
-          )
-    <|> subparser
-          (command "find" (info (cmdFind <**> helper) (progDesc "Find zettels"))
-          )
-    <|> subparser
-          (command
-            "clique"
-            (info (cmdClique <**> helper)
-                  (progDesc "Build cliques by cross linking selected zettels")
-            )
-          )
-    <|> subparser
-          (command
-            "export"
-            (info (cmdExport <**> helper) (progDesc "Export zettels as JSON"))
-          )
+      subparser(
+          cmd "create" "Create unlinked zettel"
+          <>
+          cmd "link"  "Link zettels"
+          <>
+          cmd "extend" "Create new zettel and link it to original"
+          <>
+          cmd "find"  "Find zettels"
+          <>
+          cmd "clique"  "Build cliques by cross linking selected zettels"
+          <>
+          cmd "export"  "Export zettels as JSON")
+    where cmd name desc = 
+              command
+                name
+                (info (cmdExport <**> helper) (progDesc desc))
+              
 
 
 main :: IO ()
