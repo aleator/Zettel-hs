@@ -1,4 +1,5 @@
 {-#language OverloadedStrings#-}
+{-#language ScopedTypeVariables#-}
 {-#language TemplateHaskell#-}
 {-#language DeriveAnyClass#-}
 {-#language DeriveGeneric#-}
@@ -17,6 +18,7 @@ import           Path.IO                       as Dir
 import           Data.FileEmbed                (embedFile)
 import           System.IO                     (hClose)
 import qualified Data.ByteString.Lazy.Char8    as Char8
+import           Control.Exception
 
 import qualified Data.Aeson                    as Aeson
 -- TODO: Move tantify stuff to it's own file
@@ -140,26 +142,22 @@ cmdFind =
         <|> pure FuzzyFindAll
         )
 
+--TODO, BUG: IF rg does not find anything, fzf is launched empty and error is printed
+--
 
 cmdCommands :: Parser Commands
-cmdCommands =
-      subparser(
-          cmd "create" "Create unlinked zettel"
-          <>
-          cmd "link"  "Link zettels"
-          <>
-          cmd "extend" "Create new zettel and link it to original"
-          <>
-          cmd "find"  "Find zettels"
-          <>
-          cmd "clique"  "Build cliques by cross linking selected zettels"
-          <>
-          cmd "export"  "Export zettels as JSON")
-    where cmd name desc = 
-              command
-                name
-                (info (cmdExport <**> helper) (progDesc desc))
-              
+cmdCommands = subparser
+  (  cmd cmdCreate   "create" "Create unlinked zettel"
+  <> cmd cmdAddLinks "link"   "Link zettels"
+  <> cmd cmdExtend   "extend" "Create new zettel and link it to original"
+  <> cmd cmdFind     "find"   "Find zettels"
+  <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
+  <> cmd cmdExport   "export" "Export zettels as JSON"
+  )
+ where
+  cmd theCmd name desc =
+    command name (info (theCmd <**> helper) (progDesc desc))
+
 
 
 main :: IO ()
@@ -260,14 +258,16 @@ doTantivySearch zettelkasten basedir style query = do
   
 
 tantivySetupIndex indexDir = do
-  removeDirRecur indexDir
+  removeDirRecur indexDir `catch` (\(e::IOException) -> pure () )
   createDirIfMissing False indexDir 
   writeFileBS (toFilePath (indexDir</> $(mkRelFile "meta.json"))) 
               $(embedFile "tantivy_meta.json")
 
 tantivyBuildIndex zettelkasten indexDir = do
   withProcessWait_
-    (proc "tantivy" ["index","-i", toFilePath indexDir] |> setStdin createPipe)
+    (proc "tantivy" ["index","-i", toFilePath indexDir] 
+        |> setStdin createPipe
+        |> setStdout byteStringOutput)
     (\p -> do
       let handle = getStdin p
       listZettels zettelkasten >>= traverse_ (\lnk -> do 
