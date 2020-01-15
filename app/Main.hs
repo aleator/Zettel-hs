@@ -1,4 +1,6 @@
+{-#OPTIONS_GHC -Werror=incomplete-patterns#-}
 {-#language OverloadedStrings#-}
+{-#language LambdaCase#-}
 {-#language ScopedTypeVariables#-}
 {-#language TemplateHaskell#-}
 {-#language DeriveAnyClass#-}
@@ -12,6 +14,7 @@ import           Operations
 import qualified Data.Text.Encoding            as T
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.IO             as LT
+import qualified Data.CaseInsensitive          as CI
 import           Path
 import           Data.List                      ( (\\) )
 import           Path.IO                       as Dir
@@ -26,16 +29,19 @@ import qualified Data.Aeson                    as Aeson
 
 data Commands
   = AddLinks FilePath (Maybe Text)
-  | Extend FilePath Text (Maybe Text)
+  | Extend FilePath Text (Maybe Text) (Maybe Text)
   | BuildClique CliqueType (Maybe Text)
   | Find HowToFind
   | Create Text CreateLinks
+  | ResolveReference ResolveMissing Text Text
   | ExportAsJSON WhatToExport
   deriving (Eq, Show)
 
-data HowToFind = KeywordSearch Text | FuzzyFindAll | FullTextSearch TantivySearchStyle Text
+data ResolveMissing = CreateNewByRefID | ReturnError
     deriving (Eq,Show)
 
+data HowToFind = KeywordSearch Text | FuzzyFindAll | FullTextSearch TantivySearchStyle Text
+    deriving (Eq,Show)
 
 data WhatToExport = ExportAll | ExportSearch (Maybe Text)
     deriving (Eq,Show)
@@ -99,6 +105,17 @@ cmdCreate =
             )
         )
 
+cmdResolveReference :: Parser Commands
+cmdResolveReference =
+  ResolveReference
+    <$> flag ReturnError CreateNewByRefID 
+          (long "create" <> help "If the reference doesn't point anywhere, create a new zettel and link to it")
+    <*> strOption
+          (long "origin" <> help "Zettel containing a reference" <> metavar "ZETTEL")
+    <*> strOption
+          (long "reference-text" <> short 'r' <> metavar "REFERENCE")
+
+
 cmdAddLinks :: Parser Commands
 cmdAddLinks =
   AddLinks
@@ -115,7 +132,9 @@ cmdExtend =
           (long "title" <> metavar "NEW_TITLE" <> help
             "Title for the new zettel"
           )
+    <*> optional (strOption (long "ref-id" <> short 'r' <> metavar "Reference id"))
     <*> optional (strOption (long "relation" <> short 'r' <> metavar "ZETTEL"))
+-- Consider dropping relation entirely
 
 
 cmdFind :: Parser Commands
@@ -151,6 +170,7 @@ cmdCommands = subparser
   <> cmd cmdAddLinks "link"   "Link zettels"
   <> cmd cmdExtend   "extend" "Create new zettel and link it to original"
   <> cmd cmdFind     "find"   "Find zettels"
+  <> cmd cmdResolveReference "resolve" "Resolve references in zettels"
   <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
   <> cmd cmdExport   "export" "Export zettels as JSON"
   )
@@ -175,27 +195,40 @@ main = do
   case cmdOpts of
     AddLinks origin maybeSearch -> do
       zettel   <- loadZettel zettelkasten (toText origin)
-      theLinks <- keywordSearch zettelkasten maybeSearch
-      addLinks theLinks <$> zettel |> saveZettel zettelkasten
+      searchResults <- keywordSearch zettelkasten maybeSearch
+      case searchResults of
+        Links theLinks -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
+        CreateNew _ _  -> errorExit ("links command can't create new zettels"::LText)
       pass
-    Extend origin newTitle maybeRelation -> do
+
+    Extend origin newTitle maybeReferenceID maybeRelation -> do
       original                    <- loadZettel zettelkasten (toText origin)
       (modifiedOriginal, created) <- createLinked original
+                                                  maybeReferenceID
                                                   maybeRelation
                                                   newTitle
       saveZettel zettelkasten modifiedOriginal
       saveZettel zettelkasten created
+      let linkToCreated = Link (name created) Nothing maybeReferenceID
+      linkToFile zettelkasten linkToCreated >>= toFilePath .> putStrLn
 
     Find howToFind -> do
-      links <- case howToFind of
+      searchResults <- case howToFind of
           FuzzyFindAll          -> keywordSearch zettelkasten Nothing
           KeywordSearch keyword ->  keywordSearch zettelkasten (Just keyword)
           FullTextSearch tantivyOptions query -> doTantivySearch zettelkasten indexDir 
                                                   tantivyOptions query
-      traverse_ (linkToFile zettelkasten >=> toFilePath .> putStrLn) links
+      case searchResults of
+        CreateNew title links -> do
+            zettel <- create title
+            fmap (addLinks links) zettel |> saveZettel zettelkasten
+            linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
+        Links links -> traverse_ (linkToFile zettelkasten >=> toFilePath .> putStrLn) links
 
     BuildClique cliqueType maybeKeyword -> do
-      links <- keywordSearch zettelkasten maybeKeyword
+      links <- keywordSearch zettelkasten maybeKeyword >>= \case 
+                Links lnks -> pure lnks
+                CreateNew  _ _ -> errorExit ("Clique can't create new zettels"::LText)
       case cliqueType of
         CrossLink -> do
           for_ links $ \lnk -> do
@@ -220,31 +253,53 @@ main = do
 
     Create title doAddLinks -> do
       zettel <- create title
-      lnks   <- case doAddLinks of
+      searchResults   <- case doAddLinks of
         DontAddLinks       -> pure Nothing
         DoAddLinks         -> Just <$> keywordSearch zettelkasten Nothing
         AddLinksKeyword kw -> Just <$> keywordSearch zettelkasten (Just kw)
-      saveZettel zettelkasten $ case lnks of
-        Nothing        -> zettel
-        Just someLinks -> addLinks someLinks <$> zettel
+      saveZettel zettelkasten =<< case searchResults of
+        Nothing        -> pure zettel
+        Just (CreateNew _ _) -> errorExit ("Create cannot create two zettels?"::LText)
+        Just (Links someLinks) -> pure (addLinks someLinks <$> zettel)
       linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
+
+    ResolveReference resolveMissing zettelID reference -> do
+        zettel <- loadZettel zettelkasten zettelID
+        let matches = [ lnk | lnk@(Link _ _ (Just refId)) <- links (namedValue zettel)
+                            , CI.mk refId == CI.mk reference ]
+        case matches of
+            [singularLink] -> printLink zettelkasten singularLink 
+            manyLinks@(_:_) -> traverse_ (printLink zettelkasten) manyLinks
+            []    -> do
+                          (modifiedOriginal, created) <- createLinked zettel
+                                                                      (Just reference)
+                                                                      Nothing
+                                                                      reference
+                          saveZettel zettelkasten modifiedOriginal
+                          saveZettel zettelkasten created
+                          let linkToCreated = Link (name created) Nothing (Just reference)
+                          printLink zettelkasten linkToCreated
 
     ExportAsJSON whatToExport -> do
       links <- case whatToExport of
         ExportAll                 -> listZettels zettelkasten
-        ExportSearch maybeKeyword -> keywordSearch zettelkasten maybeKeyword
+        ExportSearch maybeKeyword -> keywordSearch zettelkasten maybeKeyword >>= \case
+            Links lnks -> pure lnks
+            CreateNew _ _ -> errorExit ("Export cannot create links" :: LText)
       -- TODO: Note that this is object/line format
       for_ links $ \lnk -> do
         zettel <- loadZettel zettelkasten (linkTarget lnk)
         putLTextLn (exportAsJSON zettel)
 
+printLink zettelkasten link = linkToFile zettelkasten link >>= toFilePath .> putStrLn
+errorExit msg = LT.hPutStrLn stderr (toLText msg) >> exitFailure
 
 -- Tantivy related things
 
 data TantivySearchStyle = RebuildIndex | UseExistingIndex
     deriving (Show,Eq)
 
-doTantivySearch :: ZettelKasten -> Path Abs Dir -> TantivySearchStyle -> Text -> IO [Link]
+doTantivySearch :: ZettelKasten -> Path Abs Dir -> TantivySearchStyle -> Text -> IO SearchResults
 doTantivySearch zettelkasten basedir style query = do
   let indexDir = basedir </> $(mkRelDir ".zettel_index") 
   
@@ -253,7 +308,7 @@ doTantivySearch zettelkasten basedir style query = do
     tantivySetupIndex indexDir
     tantivyBuildIndex zettelkasten indexDir
 
-  tantivySearch indexDir query
+  Links <$> tantivySearch indexDir query
 
   
 
@@ -304,7 +359,7 @@ data ZettelKasten = ZettelKasten
     {
      saveZettel    :: Named Zettel -> IO ()
     ,loadZettel    :: Text -> IO (Named Zettel)
-    ,keywordSearch :: Maybe Text -> IO [Link]
+    ,keywordSearch :: Maybe Text -> IO SearchResults
     ,linkToFile    :: Link -> IO (Path Abs File)
     ,listZettels   :: IO [Link]
     }
@@ -338,11 +393,17 @@ fileSystemLinkToFile baseDir (Link lnk _ _) = do
 writeZettel :: Path Abs File -> Zettel -> IO ()
 writeZettel n z = writeFileText (toFilePath n) (pprZettel z)
 
+data SearchResults = CreateNew Text [Link] 
+                   | Links [Link] 
+
 rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
   let rgOpts = case maybeSearch of
         Nothing      -> ["-l", "."]
         Just keyword -> ["-l", toString keyword]
-      fzfOpts = ["--multi", "--preview", "cat {}"]
+      fzfOpts = ["--multi"
+                ,"-d","-","--with-nth","5.."
+                ,"--print-query","--expect=ctrl-n"
+                , "--preview", "cat {}"]
   (ec, out) <- withProcessTerm_
     (proc "rg" rgOpts |> setStdout createPipe)
     (\p ->
@@ -350,13 +411,18 @@ rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
         |> setStdin (getStdout p |> useHandleClose)
         |> readProcessStdout
     )
+
   let filePathToLink fp = case parseRelFile (toString fp) of
         Nothing   -> Nothing
         Just path -> path |> filename |> toFilePath |> Just
-  pure
-    [ Link (toText lnk) Nothing Nothing
-    | lnk <- toStrict out |> decodeUtf8 |> lines |> mapMaybe filePathToLink
-    ]
+  let pathsToLinks fzfResults 
+        = [ Link (toText lnk) Nothing Nothing
+          | lnk <- mapMaybe filePathToLink fzfResults ] 
+
+  case toStrict out |> decodeUtf8 |> lines of
+            query:"ctrl-n":searchResults -> CreateNew query (pathsToLinks searchResults) |> pure
+            _:_:searchResults -> Links (pathsToLinks searchResults) |> pure
+            x -> errorExit ("Cannot understand fzf result: "<>show x::LText)
 
 -- TODO: Use proper paths
 readZettel :: Path Abs Dir -> Text -> IO Zettel

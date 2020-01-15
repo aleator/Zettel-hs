@@ -60,7 +60,7 @@ refId :: Parsec Void Text Text
 refId = do
   "["
   w <- takeWhile1P (Just "ref-id") 
-                   (\c -> Char.isAlphaNum c || nonLinebreakingSpace c) --TODO
+                   (\c -> Char.isAlphaNum c || nonLinebreakingSpace c || elem c ("#-"::[Char])) --TODO
   "]:"
   linespace
   pure w

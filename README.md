@@ -12,8 +12,9 @@ links between the individual notes, which is the most toilsome
 part of maintaining a zettelkasten using plain text notes.
 
 ```
-$ Zettel --help
-Usage: Zettel (COMMAND | COMMAND | COMMAND | COMMAND | COMMAND)
+ZKHS -- simple text based zettelkasten system
+
+Usage: Zettel COMMAND
   Manipulate zettelkasten
 
 Available options:
@@ -24,7 +25,9 @@ Available commands:
   link                     Link zettels
   extend                   Create new zettel and link it to original
   find                     Find zettels
+  resolve                  Resolve references in zettels
   clique                   Build cliques by cross linking selected zettels
+  export                   Export zettels as JSON
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)

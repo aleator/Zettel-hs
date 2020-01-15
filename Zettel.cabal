@@ -32,6 +32,7 @@ library
     , relude
     , megaparsec
     , aeson
+    , path
   default-language: Haskell2010
 
 executable Zettel
@@ -53,4 +54,5 @@ executable Zettel
                      , typed-process
                      , optparse-applicative
                      , aeson
+                     , case-insensitive
 
