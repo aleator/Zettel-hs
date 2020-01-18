@@ -28,7 +28,7 @@ import qualified Data.Aeson                    as Aeson
 
 
 data Commands
-  = AddLinks FilePath (Maybe Text)
+  = AddLinks FilePath (Maybe Text) (Maybe Text)
   | Extend FilePath Text (Maybe Text) (Maybe Text)
   | BuildClique CliqueType (Maybe Text)
   | Find HowToFind
@@ -122,6 +122,8 @@ cmdAddLinks =
     <$> strOption
           (long "origin" <> help "Zettel to add links to" <> metavar "ZETTEL")
     <*> optional
+          (strOption (long "reference" <> short 'r' <> metavar "REFERENCE"))
+    <*> optional
           (strOption (long "search" <> short 's' <> metavar "SEARCH_TERM"))
 
 cmdExtend :: Parser Commands
@@ -193,11 +195,13 @@ main = do
   let zettelkasten = fileSystemZK (home </> $(mkRelDir "zettel"))
   let indexDir     = home </> $(mkRelDir "zettel/.zettel_index")--TODO: Wrap this like the zettelkasten is wrapped
   case cmdOpts of
-    AddLinks origin maybeSearch -> do
+    AddLinks origin maybeReference maybeSearch -> do
       zettel   <- loadZettel zettelkasten (toText origin)
       searchResults <- keywordSearch zettelkasten maybeSearch
       case searchResults of
-        Links theLinks -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
+        Links theLinks -> case maybeReference of
+            Nothing  -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
+            Just ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
         CreateNew _ _  -> errorExit ("links command can't create new zettels"::LText)
       pass
 
@@ -420,7 +424,9 @@ rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
           | lnk <- mapMaybe filePathToLink fzfResults ] 
 
   case toStrict out |> decodeUtf8 |> lines of
-            query:"ctrl-n":searchResults -> CreateNew query (pathsToLinks searchResults) |> pure
+            query:"ctrl-n":searchResults 
+                        -> CreateNew query (pathsToLinks searchResults) |> pure
+            query:"":[] -> CreateNew query [] |> pure
             _:_:searchResults -> Links (pathsToLinks searchResults) |> pure
             x -> errorExit ("Cannot understand fzf result: "<>show x::LText)
 

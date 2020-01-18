@@ -18,8 +18,12 @@ data Link = Link {linkTarget::Text
                  ,refNo :: Maybe Text}
     deriving (Generic,Show,Eq,Ord,Aeson.ToJSON,Aeson.FromJSON)
 
+data BibItem = BibItem {bibKey :: Text, bibText :: Text}
+    deriving (Generic,Show,Eq,Ord,Aeson.ToJSON,Aeson.FromJSON)
+
 data Zettel = Zettel {title :: Text
                      ,body :: Text
+                     ,references :: [BibItem]
                      ,tags :: [Text]
                      ,links :: [Link]}
     deriving (Generic,Show,Aeson.ToJSON,Aeson.FromJSON)
@@ -31,11 +35,25 @@ separatorLine :: IsString s => s
 separatorLine =
   "--------------------------------------------------------------------------------"
 
+referenceLine :: IsString s => s
+referenceLine =
+  "----- External references ------------------------------------------------------"
+
+parseIndentedLine :: Parsec Void Text Text
+parseIndentedLine = do
+  spaces <- takeWhile1P (Just "Indent") nonLinebreakingSpace
+  ln <- takeWhile1P Nothing (/= '\n')
+  optional newline
+  when (ln == separatorLine) (fail "Not a line (found separator)")
+  when (ln == referenceLine) (fail "Not a line (found reference separator)")
+  pure (spaces<>ln)
+
 parseLine :: Parsec Void Text Text
 parseLine = do
   ln <- takeWhile1P Nothing (/= '\n')
   optional newline
-  when (ln == separatorLine) (fail "Not a line (found  separator)")
+  when (ln == separatorLine) (fail "Not a line (found separator)")
+  when (ln == referenceLine) (fail "Not a line (found reference separator)")
   pure ln
 
 parseTags :: Parsec Void Text [Text]
@@ -76,6 +94,12 @@ link = do
     desc <- optional (takeWhile1P (Just "Link description") (/= '\n'))
     pure (Link link desc ref)
 
+multilineRef = do
+    ri <- refId
+    line1 <- parseLine
+    lines <- Text.Megaparsec.many parseIndentedLine
+    skipMany emptyLine
+    pure (BibItem ri (unlines (line1:lines)))
 
 runZettelParser :: FilePath -> Text -> Either String Zettel
 runZettelParser originFile input =
@@ -87,15 +111,24 @@ zettel = do
   skipMany emptyLine
   body <- optional 
     (unlines <$> Text.Megaparsec.some (try parseLine <|> (newline $> "")))
+
+  -- references
+  refs <- optional <| do
+    referenceLine <* newline
+    skipMany emptyLine
+    Text.Megaparsec.many multilineRef
+  
+  -- meta
   parseSeparator<*newline
   tags <- parseTags
   newline
   links <- parseLinks
   skipMany emptyLine
   parseSeparator
+
   space
   takeRest
-  pure (Zettel title (fromMaybe "" body) tags links)
+  pure (Zettel title (fromMaybe "" body) (fromMaybe [] refs) tags links)
 
 pprZettel :: Zettel -> Text
 pprZettel zettel =
@@ -107,6 +140,8 @@ pprZettel zettel =
     <> T.stripEnd (body zettel)
     <> "\n"
     <> "\n"
+    <> referenceLine <> "\n\n"
+    <> pprRefs (references zettel)
     <> separatorLine
     <> "\n"
     <> "Tags: "
@@ -120,7 +155,10 @@ pprZettel zettel =
          | Link lnk desc ref <- links zettel
          ]
     <> separatorLine
-
+   where 
+     pprRefs = map pprBib .> unlines
+     pprBib (BibItem ref txt) = "["<>ref<>"]: "<>txt
+                
 tst = do
   files' <- listDirectory "/Users/aleator/zettel/"
   let files = filter (not . ("." `isPrefixOf`)) files'

@@ -42,13 +42,16 @@ mkName title = do
 create :: Text -> IO (Named Zettel)
 create title = do
    name <- mkName title
-   pure (Named name (Zettel title mempty mempty mempty))
+   pure (Named name (Zettel title mempty mempty mempty mempty))
+
+addRefId :: Text -> Link -> Link
+addRefId newRefId (Link name rel _oldRefId) = Link name rel (Just newRefId)
 
 addLinks lnks zettel = zettel{links = ordNub (links zettel++lnks)}
 
 createLinked (Named start zettel) refID relation newTitle = do
     newName <- mkName newTitle
-    let zettelNew = Zettel newTitle mempty mempty [ Link start (Just "Origin") Nothing ]
+    let zettelNew = Zettel newTitle mempty mempty mempty [ Link start (Just "Origin") Nothing ]
     let zettelUpdated = addLinks [Link newName relation refID] zettel
     pure (Named start zettelUpdated, Named newName zettelNew)
 
