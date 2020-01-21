@@ -26,7 +26,7 @@ mkName title = do
    let  noSpace x 
             | isSpace x = '-'
             | x == '/'  = '#'
-            | otherwise = x
+            | otherwise = toLower x
         titleFN = case parseRelFile (Prelude.toString (T.map noSpace title)) of 
                    Right aPath 
                     | parent aPath == $(mkRelDir ".")
