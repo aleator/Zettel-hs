@@ -42,10 +42,7 @@ referenceLine =
 parseIndentedLine :: Parsec Void Text Text
 parseIndentedLine = do
   spaces <- takeWhile1P (Just "Indent") nonLinebreakingSpace
-  ln <- takeWhile1P Nothing (/= '\n')
-  optional newline
-  when (ln == separatorLine) (fail "Not a line (found separator)")
-  when (ln == referenceLine) (fail "Not a line (found reference separator)")
+  ln <- parseLine
   pure (spaces<>ln)
 
 parseLine :: Parsec Void Text Text
@@ -84,15 +81,28 @@ refId = do
   pure w
 
 parseLinks = 
-  "Links:" *> linespace *> newline *> Text.Megaparsec.many (link <* newline)
+  "Links:" *> linespace *> newline *> Text.Megaparsec.many (link)
 
 emptyLine = linespace <* newline
 
-link = do 
-    ref <- optional refId
-    link <- try (word "Link")
-    desc <- optional (takeWhile1P (Just "Link description") (/= '\n'))
-    pure (Link link desc ref)
+link = do
+  ref  <- optional refId
+  link <- try (word "Link")
+
+  desc <- do
+    onSameLine       <- (takeWhileP (Just "Link description") (/= '\n'))
+    mAdditionalLines <- optional <| do
+      newline
+      restOfLines <- (Text.Megaparsec.many parseIndentedLine)
+      skipMany emptyLine
+      pure restOfLines
+    case mAdditionalLines of
+        Nothing | T.null onSameLine -> pure Nothing
+        Nothing                     -> pure (Just onSameLine)
+        Just thelines               -> unlines (onSameLine : thelines) |> Just |> pure
+
+  optional newline
+  pure (Link link desc ref)
 
 multilineRef = do
     ri <- refId

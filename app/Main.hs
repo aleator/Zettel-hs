@@ -246,9 +246,7 @@ main = do
           for_ links $ \lnk -> do
             linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
             fmap
-                (addLinks
-                  [Link (name cliqueZettel) (Just "Clique link") Nothing]
-                )
+                (addLinks [Link (name cliqueZettel) (Just "Clique link") Nothing])
                 linkedZettel
               |> saveZettel zettelkasten
             linkToFile zettelkasten (linkTo cliqueZettel)
