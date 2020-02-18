@@ -50,9 +50,11 @@ executable Zettel
                      , text
                      , directory
                      , containers
+                     , unordered-containers
                      , relude
                      , typed-process
                      , optparse-applicative
                      , aeson
                      , case-insensitive
+                     , sampling
 

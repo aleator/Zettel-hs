@@ -28,22 +28,73 @@ Available commands:
   resolve                  Resolve references in zettels
   clique                   Build cliques by cross linking selected zettels
   export                   Export zettels as JSON
+  elucidate                Suggest improvements in ZettelKasten
+  neighbourhood            Zettels linkwise near to this one
+  body                     Extract zettel body, ie. text without headers and
+                           links
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)
 
+
+
+## Status
+
+This is a program build by me and for me. It misbehaves every now and then,
+but since I and it are on familiar terms, it doesn't really matter.
+
+But, if you decide to use it, this might matter a lot. Unless you like
+debugging and fixing issues, it might be better for you to write your
+own personal system instead.
+
+## Supported features
+
+* Structured zettels
+* External (bibliographic) references
+* Links with descriptive text
+* [wikilike links], which can be embedded in the text
+* Navigation and searching
+* Some link structure based tools, like neighbourhood search, which
+  I find really useful
+* Neat 'elucidate' command, which causes the program to prompt you to
+  improve something. Currently it asks you to link unlinked zettels, but
+  in the future it will likely ask you to split up long zettels or 
+  return to zettels that you have marked as WIP or TODO.
+
+## Bad features
+
+* You can't use symbols or linebreaks in [wikilike links]. Sorry.
+* If you abort fzf, the vim integration can do whatever it likes.
+  It often likes to close a random buffer.
+* Zettels with broken structure cause commands to fail silently in
+  vim. But they are easy to find using `Zettel find -q 'anything'`,
+  so I've not bothered to do anything about this.
+
 ## Vim integration
 
-There isn't one, but you can use Zettel from Vim. For example:
+There is a somewhat badly behaving [vim integration](zettel.vim). Add
+`source <path where you put it>/zettel.vim` to your init.vim or vimrc to
+enable it. It provides the following commands
+* `<localleader>zf` -- Spawn fzf to find zettels.
+* `<localleader>zg` -- Find zettels whose topic includes term under cursor
+* `<localleader>zn` -- Find zettels that link to this zettel and their links
+* `<localleader>zl` -- Add links to this zettel
+* `<localleader>zw` -- If invoked on a [wikilink] spawns fzf to add link to existing zettel. 
+* `<localleader>zr` -- If invoked on a [wikilink] navigates to linked zettel. If there is no pre-existing zettel/link it creates an empty zettel.
 
-* Add links for current note, do `:term Zettel link -- --origin %:t --search <keyword>`
+Zettels can be created using the command `:Zext 'title for new zettel'`. This
+also creates a bidirectional link between currently viewed zettel and the new
+one, called the Origin-link.  
 
-* Extend a note, e.g.,  create and link to previous, do
-  `:!Zettel extend -- --origin %:t --title <new-title>`
+If you want an unlinked zettel, the command `:Zcre 'title for new zettel'`
+creates one.
+
+You can also create new zettels by invoking find and then typing a title which
+produces no find results. This is the fastest way.
 
 ## Shell integration
 
-There isn't a shell integration either. Here are some common commands
+There isn't a shell integration. Here are some common commands
 you might use:
 
 * To edit zettels you could do `Zettel find --search <term>|xargs -o nvim -O`
@@ -53,7 +104,9 @@ you might use:
 ## Installation
 
 You need to install the excellent [`fzf`](https://github.com/junegunn/fzf) and
-[`rg`](https://github.com/BurntSushi/ripgrep) programs first. 
+[`rg`](https://github.com/BurntSushi/ripgrep) programs first.  Also, the search
+command can use [`tantivy-cli`](https://github.com/tantivy-search/tantivy-cli)
+for full text searches.
 
 Then install
 [stack](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then

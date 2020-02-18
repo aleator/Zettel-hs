@@ -74,8 +74,13 @@ word n = do
 refId :: Parsec Void Text Text
 refId = do
   "["
-  w <- takeWhile1P (Just "ref-id") 
-                   (\c -> Char.isAlphaNum c || nonLinebreakingSpace c || elem c ("#-"::[Char])) --TODO
+  w <- takeWhile1P
+    (Just "ref-id")
+    (\c ->
+      Char.isAlphaNum c 
+      || nonLinebreakingSpace c 
+      || elem c ("#-,'\"?!:;<>." :: [Char])
+    ) --TODO
   "]:"
   linespace
   pure w
@@ -83,7 +88,7 @@ refId = do
 parseLinks = 
   "Links:" *> linespace *> newline *> Text.Megaparsec.many (link)
 
-emptyLine = linespace <* newline
+emptyLine = try (linespace <* newline)
 
 link = do
   ref  <- optional refId
@@ -101,7 +106,7 @@ link = do
         Nothing                     -> pure (Just onSameLine)
         Just thelines               -> unlines (onSameLine : thelines) |> Just |> pure
 
-  optional newline
+  Text.Megaparsec.many newline
   pure (Link link desc ref)
 
 multilineRef = do

@@ -14,6 +14,7 @@ import           Operations
 import qualified Data.Text.Encoding            as T
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.IO             as LT
+import qualified Data.Char                     
 import qualified Data.CaseInsensitive          as CI
 import           Path
 import           Data.List                      ( (\\) )
@@ -22,6 +23,13 @@ import           Data.FileEmbed                (embedFile)
 import           System.IO                     (hClose)
 import qualified Data.ByteString.Lazy.Char8    as Char8
 import           Control.Exception
+import qualified Data.HashMap.Strict           as HashMap
+import qualified Data.HashSet                  as HashSet
+import           Data.HashMap.Strict (HashMap)
+import           Data.HashSet (HashSet)
+
+-- For elucidate
+import qualified Numeric.Sampling 
 
 import qualified Data.Aeson                    as Aeson
 -- TODO: Move tantify stuff to it's own file
@@ -35,6 +43,9 @@ data Commands
   | Create Text CreateLinks
   | ResolveReference ResolveMissing Text Text
   | ExportAsJSON WhatToExport
+  | Neighbourhood Text
+  | Body Text
+  | Elucidate
   deriving (Eq, Show)
 
 data ResolveMissing = CreateNewByRefID | ReturnError
@@ -104,6 +115,19 @@ cmdCreate =
                   (long "dolink" <> help "Add links without searching")
             )
         )
+
+cmdBody :: Parser Commands
+cmdBody =
+  Body
+    <$> strOption
+          (long "origin" <> help "Zettel from which to extract body from" <> metavar "ZETTEL")
+
+
+cmdNeighbourhood :: Parser Commands
+cmdNeighbourhood =
+  Neighbourhood
+    <$> strOption
+          (long "origin" <> help "Zettel from which to search" <> metavar "ZETTEL")
 
 cmdResolveReference :: Parser Commands
 cmdResolveReference =
@@ -175,6 +199,9 @@ cmdCommands = subparser
   <> cmd cmdResolveReference "resolve" "Resolve references in zettels"
   <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
   <> cmd cmdExport   "export" "Export zettels as JSON"
+  <> cmd (pure Elucidate) "elucidate" "Suggest improvements in ZettelKasten"
+  <> cmd cmdNeighbourhood "neighbourhood" "Zettels linkwise near to this one"
+  <> cmd cmdBody "body" "Extract zettel body, ie. text without headers and links"
   )
  where
   cmd theCmd name desc =
@@ -220,7 +247,8 @@ main = do
       searchResults <- case howToFind of
           FuzzyFindAll          -> keywordSearch zettelkasten Nothing
           KeywordSearch keyword ->  keywordSearch zettelkasten (Just keyword)
-          FullTextSearch tantivyOptions query -> doTantivySearch zettelkasten indexDir 
+          FullTextSearch tantivyOptions query -> Links <$> 
+            doTantivySearch zettelkasten indexDir 
                                                   tantivyOptions query
       case searchResults of
         CreateNew title links -> do
@@ -293,6 +321,35 @@ main = do
         zettel <- loadZettel zettelkasten (linkTarget lnk)
         putLTextLn (exportAsJSON zettel)
 
+    Elucidate -> do
+        -- Currently only check for unlinked
+        allZettels <- listZettels zettelkasten
+        linkStructure <- getLinkStructure zettelkasten allZettels
+        let unlinkedZettels = unlinked allZettels linkStructure
+        sampleUnlinked <- Numeric.Sampling.sampleIO (min 5 (length unlinkedZettels)) unlinkedZettels
+        case sampleUnlinked of
+         Nothing -> pure ()
+         Just sampled -> do
+            putStrLn "These notes are not linked to from anywhere:"
+            mapM_ (("  "<>).> putTextLn) sampled
+
+    Neighbourhood zettelName -> do
+        allZettels <- listZettels zettelkasten
+        linkStructure <- getLinkStructure zettelkasten allZettels
+        let neighbours = neighbourhoodAndLinks allZettels linkStructure
+                                zettelName
+        -- mapM_ putTextLn neighbours
+        let neighbourLinks = [Link x Nothing Nothing
+                             | x <- HashSet.toList neighbours ]
+        mapM_ (printLink zettelkasten) neighbourLinks
+    Body zettelNameOrFilename -> do
+        zettel <- case parseAbsFile (toString zettelNameOrFilename) of
+                    Just zettelFile -> loadZettel zettelkasten 
+                                    (filename zettelFile |> toFilePath
+                                        |> toText)
+                    Nothing -> loadZettel zettelkasten zettelNameOrFilename
+        namedValue zettel |> body |> putTextLn
+
 printLink zettelkasten link = linkToFile zettelkasten link >>= toFilePath .> putStrLn
 errorExit msg = LT.hPutStrLn stderr (toLText msg) >> exitFailure
 
@@ -301,7 +358,12 @@ errorExit msg = LT.hPutStrLn stderr (toLText msg) >> exitFailure
 data TantivySearchStyle = RebuildIndex | UseExistingIndex
     deriving (Show,Eq)
 
-doTantivySearch :: ZettelKasten -> Path Abs Dir -> TantivySearchStyle -> Text -> IO SearchResults
+doTantivySearch
+  :: ZettelKasten
+  -> Path Abs Dir
+  -> TantivySearchStyle
+  -> Text
+  -> IO [Link]
 doTantivySearch zettelkasten basedir style query = do
   let indexDir = basedir </> $(mkRelDir ".zettel_index") 
   
@@ -310,7 +372,7 @@ doTantivySearch zettelkasten basedir style query = do
     tantivySetupIndex indexDir
     tantivyBuildIndex zettelkasten indexDir
 
-  Links <$> tantivySearch indexDir query
+  tantivySearch indexDir query
 
   
 
@@ -352,8 +414,70 @@ tantivySearch indexDir queryText = do
 newtype TantivyOutput = TantivyOutput {identifier :: [Text]}
     deriving (Eq,Show,Generic,Aeson.FromJSON)
 
+--Work for Find linkless zettels and other structural things.
+
+data LinkStructure = LS {linksTo, hasLinkFrom :: HashMap Text (HashSet Text) }
+
+instance Semigroup LinkStructure where
+    (<>) (LS to₁ from₁) (LS to₂ from₂) = LS (to₁<>to₂) (from₁<>from₂)
+
+instance Monoid LinkStructure where
+    mempty = LS mempty mempty
+
+-- Get link structure out of linked zettels
+getLinkStructure :: ZettelKasten -> [Link] -> IO LinkStructure
+getLinkStructure zettelkasten zettels = 
+  flip foldMap zettels $ \zettelLink -> do
+    zettel <- loadZettel zettelkasten (linkTarget zettelLink)
+    let
+      theLinks = namedValue zettel |> links |> map linkTarget
+      lnksTo   = HashMap.singleton (name zettel) (HashSet.fromList theLinks)
+      lnksFrom = HashMap.fromList
+        (zip theLinks (repeat (name zettel |> HashSet.singleton)))
+    pure (LS lnksTo lnksFrom)
+
+-- Find the 'neighbourhood' of the zettel. 
+neighbourhoodAndLinks :: [Link] -> LinkStructure -> Text -> HashSet Text
+neighbourhoodAndLinks links ls@(LS thisLinksTo thisHasLinkFrom) zettelName 
+    = mLookup zettelName thisLinksTo  <> neighbourhood links ls zettelName
+
+mLookup key hashmap = HashMap.lookup key hashmap |> fromMaybe mempty 
+
+neighbourhood :: [Link] -> LinkStructure -> Text -> HashSet Text
+neighbourhood links (LS thisLinksTo thisHasLinkFrom) zettelName =
+    let 
+      linkedFrom = fromMaybe mempty (HashMap.lookup zettelName thisHasLinkFrom)
+      siblings   = flip foldMap linkedFrom $ \linkingZettel ->
+                     mLookup linkingZettel thisLinksTo 
+    in siblings
+
+-- Find unlinked zettels
+unlinked :: [Link] -> LinkStructure -> HashSet Text
+unlinked links (LS thisLinksTo thisHasLinkFrom) =
+  foldMap 
+    (\zettelLink -> case HashMap.lookup zettelLink thisHasLinkFrom of
+                      Nothing -> HashSet.singleton zettelLink
+                      Just _ -> mempty
+    )
+    (map linkTarget links)
 
 
+-- Elucidation on unlinked stuff
+
+autoSearchOnTitle :: ZettelKasten -> Path Abs Dir -> Text -> IO [Link]
+autoSearchOnTitle zettelkasten tantivyIndex zettelName 
+ = doTantivySearch zettelkasten 
+                   tantivyIndex 
+                   RebuildIndex -- Be smart with this
+                   (guessTantivySearch zettelName)
+
+-- TODO: This violates the do-not-process-text principle
+guessTantivySearch :: Text -> Text
+guessTantivySearch zettelTitle = 
+    let 
+     noUID = T.drop (T.length "2135546E-230E-40D3-91ED-D40D87F77205-") zettelTitle
+     query = T.map (\x -> if Data.Char.isAlpha x then x else ' ') noUID |> words  |> unwords
+    in query
 
 -- The 'model/controller' datatype
 
@@ -405,7 +529,7 @@ rgFind zettelkastendir maybeSearch = withCurrentDir zettelkastendir <| do
       fzfOpts = ["--multi"
                 ,"-d","-","--with-nth","5.."
                 ,"--print-query","--expect=ctrl-n"
-                , "--preview", "cat {}"]
+                , "--preview", "zettel body --origin {}"]
   (ec, out) <- withProcessTerm_
     (proc "rg" rgOpts |> setStdout createPipe)
     (\p ->

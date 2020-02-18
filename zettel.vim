@@ -42,6 +42,13 @@ nmap <localleader>zr :call ZResolve()<CR>
 
 command! -nargs=1 Zext !Zettel extend --origin %:t --title <args>
 
+function! ZettelNeighbourhood(origin)
+    new
+    call termopen("Zettel neighbourhood --origin " . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    let g:zettel_buffer = bufnr('%')
+    call feedkeys("i")
+endfunction
+
 function! ZettelFind(kw)
     new
     call termopen("Zettel find " . a:kw . " | xargs nvr -o",{'on_exit':'MyExitFunction'})
@@ -78,6 +85,17 @@ command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
 nmap <localleader>zf :call ZettelFind('')<CR>
 nmap <localleader>zg :call ZettelFind(expand('<cword>'))<CR>
+nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>
 nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
+
+autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
+autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
+autocmd BufRead */zettel/* highlight ZInlineCode guifg=green
+" Match a zettelkasten wikilink
+autocmd BufRead */zettel/* match Comment /\[.\{-}\]/ 
+autocmd BufRead */zettel/* match ZInlineCode /\`.\{-}\`/ 
+autocmd BufRead */zettel/* match Keyword /External references/ 
+autocmd BufRead */zettel/* match Comment /-----.....................------------------------------------------------------/
+" autocmd BufRead */zettel/* match Comment /........-....-....-....-............-.*/
 
