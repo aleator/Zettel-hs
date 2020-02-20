@@ -9,7 +9,7 @@ your zettelkasten for you.
 It creates and manages links for a collection of plain text
 zettelkasten files. The main use for the program is to manage
 links between the individual notes, which is the most toilsome
-part of maintaining a zettelkasten using plain text notes.
+part of maintaining a plain text zettelkasten.
 
 ```
 ZKHS -- simple text based zettelkasten system
@@ -35,6 +35,35 @@ Available commands:
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)
+
+## What do the Zettels look like?
+
+Here is an example from my collection:
+
+```
+The binomial distribution
+--------------------------------------------------------------------------------
+
+           ┌────────────────────────────────────────┐
+           │              ⎛n⎞                       │
+           │ B(k; n, p) = ⎜ ⎟ * p^k * (1 - p)^(n-k) │
+           │              ⎝k⎠                       │
+           └────────────────────────────────────────┘
+
+"What is the probability to get k successes in n trials, each with probability
+p of success?"
+
+cf. `pbinom` in r.
+
+----- External references ------------------------------------------------------
+[1]: Binomial distribution - Wikipedia [WWW Document], n.d. URL https://en.wikipedia.org/wiki/Binomial_distribution (accessed 2.20.20).
+
+--------------------------------------------------------------------------------
+Tags: statistics
+Links: 
+67257A06-4634-40EA-A788-011771081C40-book-bayesian-statistics-the-fun-way Origin
+--------------------------------------------------------------------------------
+```
 
 
 

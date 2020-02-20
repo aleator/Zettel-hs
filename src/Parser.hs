@@ -71,6 +71,12 @@ word n = do
   when (w == separatorLine) (fail "Unexpected Separator")
   pure w
 
+linkWord :: String -> Parsec Void Text Text
+linkWord n = do
+  w <- takeWhile1P (Just n) (not . (`elem` [' ', '\t', '\n'])) --TODO
+  when (w == separatorLine) (fail "Unexpected Separator")
+  pure w
+
 refId :: Parsec Void Text Text
 refId = do
   "["
@@ -92,7 +98,7 @@ emptyLine = try (linespace <* newline)
 
 link = do
   ref  <- optional refId
-  link <- try (word "Link")
+  link <- try (linkWord "Link")
 
   desc <- do
     onSameLine       <- (takeWhileP (Just "Link description") (/= '\n'))
