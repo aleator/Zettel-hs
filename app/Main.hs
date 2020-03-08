@@ -43,7 +43,7 @@ import qualified Data.Aeson                    as Aeson
 data Commands
   = AddLinks FilePath (Maybe Text) (Maybe Text)
   | Extend FilePath Text (Maybe Text) (Maybe Text)
-  | BuildClique CliqueType (Maybe Text)
+  -- | BuildClique CliqueType (Maybe Text)
   | Find (Maybe Text) HowToFind
   | Create Text (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
@@ -90,27 +90,27 @@ cmdExport =
         )
 
 
-cmdClique :: Parser Commands
-cmdClique =
-  BuildClique
-    <$> (   flag'
-            CrossLink
-            (  long "crosslink"
-            <> help "Crosslink zettels directly without creating a new one"
-            )
-        <|> (   CliqueZettel
-            <$> strOption
-                  (  long "title"
-                  <> help "Title for zettel describing the clique"
-                  )
-            )
-        )
-    <*> optional
-          (strArgument
-            (  help "Search term for selecting Clique members"
-            <> metavar "KEYWORD"
-            )
-          )
+--cmdClique :: Parser Commands
+--cmdClique =
+--  BuildClique
+--    <$> (   flag'
+--            CrossLink
+--            (  long "crosslink"
+--            <> help "Crosslink zettels directly without creating a new one"
+--            )
+--        <|> (   CliqueZettel
+--            <$> strOption
+--                  (  long "title"
+--                  <> help "Title for zettel describing the clique"
+--                  )
+--            )
+--        )
+--    <*> optional
+--          (strArgument
+--            (  help "Search term for selecting Clique members"
+--            <> metavar "KEYWORD"
+--            )
+--          )
 
 cmdCreate :: Parser Commands
 cmdCreate =
@@ -250,7 +250,7 @@ cmdCommands = subparser
   <> cmd cmdExtend   "extend" "Create new zettel and link it to original"
   <> cmd cmdFind     "find"   "Find zettels"
   <> cmd cmdResolveReference "resolve" "Resolve references in zettels"
-  <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
+  -- <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
   <> cmd cmdExport   "export" "Export zettels as JSON"
   <> cmd (pure Elucidate) "elucidate" "Suggest improvements in ZettelKasten"
   <> cmd cmdNeighbourhood "neighbourhood" "Zettels linkwise near to this one"
@@ -323,29 +323,29 @@ main = do
             linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
         Links links -> traverse_ (linkToFile zettelkasten >=> toFilePath .> putStrLn) links
 
-    BuildClique cliqueType maybeKeyword -> do
-      links <- keywordSearch zettelkasten maybeKeyword >>= \case 
-                Links lnks -> pure lnks
-                CreateNew  _ _ -> errorExit ("Clique can't create new zettels"::LText)
-      case cliqueType of
-        CrossLink -> do
-          for_ links $ \lnk -> do
-            zettel <- loadZettel zettelkasten (linkTarget lnk)
-            fmap (addLinks (filter (/= lnk) links)) zettel
-              |> saveZettel zettelkasten
+    --BuildClique cliqueType maybeKeyword -> do
+    --  links <- keywordSearch zettelkasten maybeKeyword >>= \case 
+    --            Links lnks -> pure lnks
+    --            CreateNew  _ _ -> errorExit ("Clique can't create new zettels"::LText)
+    --  case cliqueType of
+    --    CrossLink -> do
+    --      for_ links $ \lnk -> do
+    --        zettel <- loadZettel zettelkasten (linkTarget lnk)
+    --        fmap (addLinks (filter (/= lnk) links)) zettel
+    --          |> saveZettel zettelkasten
 
-        CliqueZettel title -> do
-          cliqueZettel <- create title
-          fmap (addLinks links) cliqueZettel |> saveZettel zettelkasten
-          for_ links $ \lnk -> do
-            linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
-            fmap
-                (addLinks [Link (name cliqueZettel) (Just "Clique link") Nothing])
-                linkedZettel
-              |> saveZettel zettelkasten
-            linkToFile zettelkasten (linkTo cliqueZettel)
-              >>= toFilePath
-              .>  putStrLn
+    --    CliqueZettel title -> do
+    --      cliqueZettel <- create title
+    --      fmap (addLinks links) cliqueZettel |> saveZettel zettelkasten
+    --      for_ links $ \lnk -> do
+    --        linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
+    --        fmap
+    --            (addLinks [Link (name cliqueZettel) (Just "Clique link") Nothing])
+    --            linkedZettel
+    --          |> saveZettel zettelkasten
+    --        linkToFile zettelkasten (linkTo cliqueZettel)
+    --          >>= toFilePath
+    --          .>  putStrLn
 
     Create title mOrigin doAddLinks addInitialContent -> do
       initialContent <- case addInitialContent of
