@@ -15,16 +15,19 @@ extra-source-files:  README.md
 
 library
   exposed-modules:
-      Zettel
+      ZettelKasten
      , Prelude
      , Parser
      , Operations
+     , Elucidations
   hs-source-dirs:
       src
   extensions: OverloadedStrings
   build-depends:
       base-noprelude >=4.7 && <5
     , flow
+    , unordered-containers
+    , typed-process
     , uuid
     , text
     , directory
@@ -32,13 +35,16 @@ library
     , relude
     , megaparsec
     , aeson
+    , path-io
     , path
+    , cryptohash-sha256
   default-language: Haskell2010
 
 executable Zettel
   hs-source-dirs:      app
   main-is:             Main.hs
   extra-source-files:  tantivy_meta.json
+  extensions: OverloadedStrings
   default-language:    Haskell2010
   build-depends:       base-noprelude >= 4.7 && < 5
                      , Zettel
@@ -57,4 +63,7 @@ executable Zettel
                      , aeson
                      , case-insensitive
                      , sampling
+                     , cryptohash-sha256
+                     , time
+                     , sqlite-simple
 

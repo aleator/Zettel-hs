@@ -52,9 +52,19 @@ addLinks lnks zettel = zettel{links = ordNub (links zettel++lnks)}
 
 createLinked (Named start zettel) refID relation newTitle = do
     newName <- mkName newTitle
-    let zettelNew = Zettel newTitle mempty mempty mempty [ Link start (Just "Origin") Nothing ]
+    let zettelNew = Zettel newTitle mempty mempty mempty [ Link start (Just "Origin") (Just "Origin") ]
     let zettelUpdated = addLinks [Link newName relation refID] zettel
     pure (Named start zettelUpdated, Named newName zettelNew)
+
+findOriginLink :: Zettel -> Maybe Link
+findOriginLink zettel = find
+  (\lnk -> fmap T.strip (description lnk) == Just "Origin" || refNo lnk == Just "Origin")
+  (links zettel)
+
+bodyChunks :: Named Zettel -> Either String [Text]
+bodyChunks namedZettel 
+  = body (namedValue namedZettel) 
+    |> textChunks (name namedZettel |> Prelude.toString)
 
 exportAsJSON :: Named Zettel -> LT.Text
 exportAsJSON = Aeson.encodeToLazyText

@@ -45,6 +45,12 @@ parseIndentedLine = do
   ln <- parseLine
   pure (spaces<>ln)
 
+parseNonEmptyLine :: Parsec Void Text Text
+parseNonEmptyLine = try $ do
+    line <- parseLine
+    when (T.all Char.isSpace line) (fail "Expected non empty line")
+    pure line
+
 parseLine :: Parsec Void Text Text
 parseLine = do
   ln <- takeWhile1P Nothing (/= '\n')
@@ -91,6 +97,7 @@ refId = do
   linespace
   pure w
 
+
 parseLinks = 
   "Links:" *> linespace *> newline *> Text.Megaparsec.many (link)
 
@@ -115,6 +122,11 @@ link = do
   Text.Megaparsec.many newline
   pure (Link link desc ref)
 
+singleLineRef = do
+    ri <- refId
+    line1 <- parseLine
+    pure (BibItem ri line1)
+
 multilineRef = do
     ri <- refId
     line1 <- parseLine
@@ -122,9 +134,22 @@ multilineRef = do
     skipMany emptyLine
     pure (BibItem ri (unlines (line1:lines)))
 
+runSingleLineBibParser :: FilePath -> Text -> Either String BibItem
+runSingleLineBibParser originFile input
+    = first errorBundlePretty (parse singleLineRef originFile input)
+
 runZettelParser :: FilePath -> Text -> Either String Zettel
 runZettelParser originFile input =
     first errorBundlePretty (parse zettel originFile input)
+
+textChunks :: FilePath -> Text -> Either String [Text]
+textChunks originFile input 
+   = parse chunker originFile input |> first errorBundlePretty 
+  where
+   chunker = 
+        sepBy (T.unlines <$> Text.Megaparsec.some parseNonEmptyLine) 
+              (Text.Megaparsec.some emptyLine)
+
 
 zettel :: Parsec Void Text Zettel
 zettel = do
@@ -178,7 +203,9 @@ pprZettel zettel =
     <> separatorLine
    where 
      pprRefs = map pprBib .> unlines
-     pprBib (BibItem ref txt) = "["<>ref<>"]: "<>txt
+
+pprBib :: BibItem -> Text
+pprBib (BibItem ref txt) = "["<>ref<>"]: "<>T.strip txt
                 
 tst = do
   files' <- listDirectory "/Users/aleator/zettel/"
