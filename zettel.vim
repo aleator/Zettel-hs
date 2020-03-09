@@ -7,22 +7,37 @@ endfunction
 
 command! -nargs=1 Zcre  call ZCreate(<q-args>)
 
-function! ZettelSplit()
+function! ZettelSplit(current)
     let l:title = input("Split title> ")
     normal! gv"zx
-    let l:result = system("Zettel create --title " . shellescape(l:title) . " --initial ", @z)
+    call append(line("."),"[" . l:title . "]")
+    execute ':write'
+    let l:cmd = "Zettel create --title " . shellescape(l:title) 
+                \ . " --origin " . shellescape(a:current) 
+                \ . " --ref-id " . shellescape(l:title) 
+                \ . " --initial "
+    echomsg(l:cmd)
+    let l:result = system(l:cmd, @z)
+    edit
     execute ":sp " . l:result
 endfunction
 
-function! ZExtend(title,...)
-	if a:0 > 0 
-    let l:name = system("Zettel extend --origin " . expand("%:t") . " --title " . a:title . " --ref-id " . a:1)
-	else
-    let l:name = system("Zettel extend --origin " . expand("%:t") . " --title " . a:title )
+function! ZExtend(title)
+    let l:name = system("Zettel create --origin " . expand("%:t") . " --title " . a:title )
 	end
     edit
     execute ":sp " . l:name
 endfunction
+
+"function! ZExtend(title,...)
+"	if a:0 > 0 
+"    let l:name = system("Zettel extend --origin " . expand("%:t") . " --title " . a:title . " --ref-id " . a:1)
+"	else
+"    let l:name = system("Zettel extend --origin " . expand("%:t") . " --title " . a:title )
+"	end
+"    edit
+"    execute ":sp " . l:name
+"endfunction
 
 function! ZFindWikiLink(origin, ...)
  execute 'normal!"zyi['
@@ -49,7 +64,7 @@ function! ZResolve()
 endfunction
 nmap <localleader>zr :call ZResolve()<CR>
 
-command! -nargs=1 Zext !Zettel extend --origin %:t --title <args>
+command! -nargs=1 Zext !Zettel create --origin %:t --title <args>
 
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
@@ -102,8 +117,11 @@ function! ZettelLink(origin,...)
 endfunction
 
 
+command! -nargs=0 ZFill :!zettel auto-fill --target %:t
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
+vmap <localleader>zs :call ZettelSplit(expand('%:t'))<CR>
+"nmap <localleader>zs :call ZettelSplit(expand('%:t'))<CR>
 nmap <localleader>zf :call ZettelFind(expand('%:t'),'')<CR>
 nmap <localleader>zg :call ZettelFind(expand('%:t'),expand('<cword>'))<CR>
 nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>
@@ -116,6 +134,7 @@ autocmd BufRead */zettel/* syn keyword Keyword Tags Links
 autocmd BufRead */zettel/* highlight ZInlineCode guifg=green
 " Match a zettelkasten wikilink
 autocmd BufRead */zettel/* match Comment /\[.\{-}\]/ 
+autocmd BufRead */zettel/* match Comment /\*.*\*/ 
 autocmd BufRead */zettel/* match ZInlineCode /\`.\{-}\`/ 
 autocmd BufRead */zettel/* match Keyword /External references/ 
 autocmd BufRead */zettel/* match Comment /-----.....................------------------------------------------------------/

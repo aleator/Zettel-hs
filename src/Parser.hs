@@ -83,8 +83,8 @@ linkWord n = do
   when (w == separatorLine) (fail "Unexpected Separator")
   pure w
 
-refId :: Parsec Void Text Text
-refId = do
+refLabel :: Parsec Void Text Text
+refLabel = try <| do
   "["
   w <- takeWhile1P
     (Just "ref-id")
@@ -93,9 +93,26 @@ refId = do
       || nonLinebreakingSpace c 
       || elem c ("#-,'\"?!:;<>." :: [Char])
     ) --TODO
-  "]:"
+  "]"
+  pure w
+
+refId :: Parsec Void Text Text
+refId = try <| do
+  w <- refLabel <* ":"
   linespace
   pure w
+
+type Label = Text
+
+labelSoup :: Parsec Void Text [Either Text Label]
+labelSoup = do
+    start <- takeWhileP Nothing (/='[')
+    label <- try $ optional $ do
+                         (Right <$> refLabel) <|> ("["*>pure (Left "["))
+    rest <- if T.null start && isNothing label 
+                then pure []
+                else labelSoup
+    pure <| maybe (Left start:rest) (\x -> Left start:x:rest) label --pure (Left start:label:rest)
 
 
 parseLinks = 
@@ -133,6 +150,11 @@ multilineRef = do
     lines <- Text.Megaparsec.many parseIndentedLine
     skipMany emptyLine
     pure (BibItem ri (unlines (line1:lines)))
+
+runTheParser :: FilePath -> Text -> Parsec Void Text a 
+                -> Either String a
+runTheParser originFile input parser
+    = first errorBundlePretty (parse parser originFile input)
 
 runSingleLineBibParser :: FilePath -> Text -> Either String BibItem
 runSingleLineBibParser originFile input

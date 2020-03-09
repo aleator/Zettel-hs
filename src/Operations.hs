@@ -48,7 +48,9 @@ create title = do
 addRefId :: Text -> Link -> Link
 addRefId newRefId (Link name rel _oldRefId) = Link name rel (Just newRefId)
 
-addLinks lnks zettel = zettel{links = ordNub (links zettel++lnks)}
+addLinks lnks zettel = zettel { links = ordNub (links zettel ++ lnks) }
+addReferences refs zettel =
+  zettel { references = ordNub (references zettel ++ refs) }
 
 createLinked (Named start zettel) refID relation newTitle = do
     newName <- mkName newTitle
@@ -75,3 +77,14 @@ exportAsTantifyJSON (Named name zettel) =
         ["body" Aeson..= (body zettel)
         ,"title" Aeson..= (title zettel)
         ,"identifier" Aeson..= name])
+
+
+--- Body Parser related
+
+getPotentialLabels :: Named Zettel -> [Label]
+getPotentialLabels z = case runTheParser (name z |> Prelude.toString)   
+                                         (namedValue z |> body)
+                                         labelSoup of
+                        Left err -> []
+                        Right v -> rights v
+    

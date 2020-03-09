@@ -42,10 +42,10 @@ import qualified Data.Aeson                    as Aeson
 
 data Commands
   = AddLinks FilePath (Maybe Text) (Maybe Text)
-  | Extend FilePath Text (Maybe Text) (Maybe Text)
+--   | Extend FilePath Text (Maybe Text) (Maybe Text)
   -- | BuildClique CliqueType (Maybe Text)
   | Find (Maybe Text) HowToFind
-  | Create Text (Maybe Text) CreateLinks InitialContent
+  | Create Text (Maybe Text) (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
   | ExportAsJSON WhatToExport
   | Neighbourhood Text
@@ -54,6 +54,7 @@ data Commands
   | AddReferences Text (Target BibItem)
   | Elucidate
   | Thread Text
+  | FillLabels Text
   deriving (Eq, Show)
 
 data InitialContent = NoInitialContent | YesInitialContent deriving (Eq,Show)
@@ -119,6 +120,8 @@ cmdCreate =
           (long "title" <> help "Title for the new zettel" <> metavar "ZETTEL")
     <*> optional (strOption
           (long "origin" <> help "Optional Origin zettel for the created one" <> metavar "ZETTEL"))
+    <*> optional (strOption
+          (long "ref-id" <> help "How to refer to this zettel in the origin, if given" <> metavar "ZETTEL"))
     <*> (   (AddLinksKeyword <$> strOption
               (  long "search"
               <> help "Search for links to add to the new zettel"
@@ -193,16 +196,16 @@ cmdAddLinks =
     <*> optional
           (strOption (long "search" <> short 's' <> metavar "SEARCH_TERM"))
 
-cmdExtend :: Parser Commands
-cmdExtend =
-  Extend
-    <$> strOption (long "origin" <> metavar "ZETTEL" <> help "Source zettel")
-    <*> strOption
-          (long "title" <> metavar "NEW_TITLE" <> help
-            "Title for the new zettel"
-          )
-    <*> optional (strOption (long "ref-id" <> short 'r' <> metavar "Reference id"))
-    <*> optional (strOption (long "relation" <> short 'r' <> metavar "ZETTEL"))
+--cmdExtend :: Parser Commands
+--cmdExtend =
+--  Extend
+--    <$> strOption (long "origin" <> metavar "ZETTEL" <> help "Source zettel")
+--    <*> strOption
+--          (long "title" <> metavar "NEW_TITLE" <> help
+--            "Title for the new zettel"
+--          )
+--    <*> optional (strOption (long "ref-id" <> short 'r' <> metavar "Reference id"))
+--    <*> optional (strOption (long "relation" <> short 'r' <> metavar "ZETTEL"))
 -- Consider dropping relation entirely
 
 
@@ -233,11 +236,19 @@ cmdFind =
             )
         <|> pure FuzzyFindAll
         )
+
 cmdThread :: Parser Commands
 cmdThread =
   Thread
     <$> strOption (long "origin" <> metavar "ZETTEL" <> help
                   "Zettel to start following Origin thread from"
+                )
+
+cmdFillLabels :: Parser Commands
+cmdFillLabels =
+  FillLabels
+    <$> strOption (long "target" <> metavar "ZETTEL" <> help
+                  "Zettel to try to autofill labels for"
                 )
 
 --TODO, BUG: IF rg does not find anything, fzf is launched empty and error is printed
@@ -247,7 +258,7 @@ cmdCommands :: Parser Commands
 cmdCommands = subparser
   (  cmd cmdCreate   "create" "Create unlinked zettel"
   <> cmd cmdAddLinks "link"   "Link zettels"
-  <> cmd cmdExtend   "extend" "Create new zettel and link it to original"
+  -- <> cmd cmdExtend   "extend" "Create new zettel and link it to original"
   <> cmd cmdFind     "find"   "Find zettels"
   <> cmd cmdResolveReference "resolve" "Resolve references in zettels"
   -- <> cmd cmdClique "clique" "Build cliques by cross linking selected zettels"
@@ -258,6 +269,7 @@ cmdCommands = subparser
   <> cmd cmdReferences "references" "Extract references from a Zettel"
   <> cmd cmdAddReferences "addreferences" "Add references to a Zettel"
   <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
+  <> cmd cmdFillLabels "auto-fill" "Fill missing wikilinks and references from origin"
   )
  where
   cmd theCmd name desc =
@@ -281,6 +293,7 @@ main = do
   let metaDB       = home </> $(mkRelFile "zettel/.meta_db")--TODO: Wrap this like the zettelkasten is wrapped
 
   case cmdOpts of
+
     AddLinks origin maybeReference maybeSearch -> do
       zettel   <- loadZettel zettelkasten (toText origin)
       searchResults <- keywordSearch zettelkasten maybeSearch
@@ -291,16 +304,16 @@ main = do
         CreateNew _ _  -> errorExit ("links command can't create new zettels"::LText)
       pass
 
-    Extend origin newTitle maybeReferenceID maybeRelation -> do
-      original                    <- loadZettel zettelkasten (toText origin)
-      (modifiedOriginal, created) <- createLinked original
-                                                  maybeReferenceID
-                                                  maybeRelation
-                                                  newTitle
-      saveZettel zettelkasten modifiedOriginal
-      saveZettel zettelkasten created
-      let linkToCreated = Link (name created) Nothing maybeReferenceID
-      linkToFile zettelkasten linkToCreated >>= toFilePath .> putStrLn
+   -- Extend origin newTitle maybeReferenceID maybeRelation -> do
+   --   original                    <- loadZettel zettelkasten (toText origin)
+   --   (modifiedOriginal, created) <- createLinked original
+   --                                               maybeReferenceID
+   --                                               maybeRelation
+   --                                               newTitle
+   --   saveZettel zettelkasten modifiedOriginal
+   --   saveZettel zettelkasten created
+   --   let linkToCreated = Link (name created) Nothing maybeReferenceID
+   --   linkToFile zettelkasten linkToCreated >>= toFilePath .> putStrLn
 
     Find mOrigin howToFind -> do
       searchResults <- case howToFind of
@@ -347,7 +360,7 @@ main = do
     --          >>= toFilePath
     --          .>  putStrLn
 
-    Create title mOrigin doAddLinks addInitialContent -> do
+    Create title mOrigin mRefId doAddLinks addInitialContent -> do
       initialContent <- case addInitialContent of
                          NoInitialContent -> pure ""
                          YesInitialContent -> T.getContents
@@ -358,14 +371,12 @@ main = do
             Just origin -> do
                 original <- loadZettel zettelkasten origin 
                 first Just <$> createLinked original
-                                             (Just "Origin")
-                                             (Just "Origin")
-                                              title
+                                             mRefId
+                                             Nothing
+                                             title
       traverse_ (saveZettel zettelkasten) modifiedOriginal
-      saveZettel zettelkasten created
       
-      zettel' <- create title
-      let zettel = fmap (\z->z{body=initialContent}) zettel'
+      let zettel = fmap (\z->z{body=initialContent}) created
       
       searchResults   <- case doAddLinks of
         DontAddLinks       -> pure Nothing
@@ -376,6 +387,7 @@ main = do
         Nothing        -> pure zettel
         Just (CreateNew _ _) -> errorExit ("Create cannot create two zettels?"::LText)
         Just (Links someLinks) -> pure (addLinks someLinks <$> zettel)
+
       linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
 
     ResolveReference resolveMissing zettelID reference -> do
@@ -433,6 +445,7 @@ main = do
         let neighbourLinks = [Link x Nothing Nothing
                              | x <- HashSet.toList neighbours ]
         mapM_ (printLink zettelkasten) neighbourLinks
+
     Body zettelNameOrFilename -> do
         zettel <- readZettelFromNameOrFilename zettelkasten zettelNameOrFilename
         namedValue zettel |> body |> putTextLn
@@ -444,17 +457,32 @@ main = do
                           .> T.map (\x -> if x=='\n' then ' ' else x) 
                           .> putTextLn)
 
-    Thread zettelName -> 
+    Thread zettelName -> do
         -- Assume that there is only a single origin to keep this simple.
-        let loop acc  zettel = do
-                z <- loadZettel zettelkasten zettel
-                case findOriginLink (namedValue z) of
-                    Nothing -> pure acc
-                    Just origin     
-                        -- Let's not loop if there is a cycle:
-                        | (origin) `elem` acc -> pure acc
-                        | otherwise         -> loop (origin:acc) (linkTarget origin)
-        in loop [] zettelName >>= reverse .> traverse_ (printLink zettelkasten)
+        origins <- originChain zettelkasten zettelName
+        traverse_ (printLink zettelkasten) origins
+
+    FillLabels zettelName -> do
+        -- Assume that there is only a single origin to keep this simple.
+        zettel <- loadZettel zettelkasten zettelName
+        let labels = getPotentialLabels zettel
+        when (null labels) exitSuccess
+        case findOriginLink (namedValue zettel) of
+            Nothing -> errorExit ("There is no origin link" :: Text)
+            Just origin -> do
+                        originZettel <- loadZettel zettelkasten 
+                                          (linkTarget origin)
+                        let lnks = [lnk | lnk <- links (namedValue originZettel)
+                                        , ref <- maybeToList (refNo lnk)
+                                        , ref `elem` labels ]
+                        let originRefs = [bib | bib <- references   
+                                                    (namedValue originZettel)
+                                          , bibKey bib `elem` labels ]
+                        fmap (addLinks lnks) zettel 
+                            |> fmap (addReferences originRefs)
+                            |> saveZettel zettelkasten
+                        pure ()
+
 
 readZettelFromNameOrFilename zettelkasten zettelNameOrFilename =
   case parseAbsFile (toString zettelNameOrFilename) of
@@ -531,8 +559,23 @@ newtype TantivyOutput = TantivyOutput {identifier :: [Text]}
 -- Find the 'neighbourhood' of the zettel. 
 neighbourhoodAndLinks :: [Link] -> LinkStructure -> Text -> HashSet Text
 neighbourhoodAndLinks links ls@(LS thisLinksTo thisHasLinkFrom) zettelName 
-    = mLookup zettelName thisLinksTo  
-      <> uncurry (<>) (neighbourhood links ls zettelName)
+    = let
+        fromHere = mLookup zettelName thisLinksTo  
+        (parents,siblings) =  neighbourhood links ls zettelName
+      in fromHere <> siblings <> parents
+
+-- Find the origin chain of a zettel
+originChain :: ZettelKasten -> Text -> IO [Link]
+originChain zettelkasten zettelName = 
+        let loop acc zettel = do
+                z <- loadZettel zettelkasten zettel
+                case findOriginLink (namedValue z) of
+                    Nothing -> pure acc
+                    Just origin     
+                        -- Let's not loop if there is a cycle:
+                        | (origin) `elem` acc -> pure acc
+                        | otherwise         -> loop (origin:acc) (linkTarget origin)
+        in loop [] zettelName >>= reverse .> pure 
 
 mLookup key hashmap = HashMap.lookup key hashmap |> fromMaybe mempty 
 
