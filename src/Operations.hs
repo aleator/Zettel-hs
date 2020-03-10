@@ -8,12 +8,15 @@ import Parser -- TODO Extract type
 import Data.UUID
 import Data.UUID.V4
 import Data.Char
+import Data.Time.Clock 
+import Data.Time.Calendar 
 import Data.Text (Text)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text as T
 import qualified Data.Aeson.Text as Aeson
 import qualified Data.Aeson as Aeson
 import Path
+import System.Random
 
 
 data Named a = Named {name :: Text, namedValue :: a}
@@ -21,24 +24,59 @@ data Named a = Named {name :: Text, namedValue :: a}
 
 linkTo named = Link (name named) Nothing Nothing
 
-mkName :: Text -> IO Text
-mkName title = do
+maulToFilename title = 
    let  noSpace x 
             | isSpace x = '-'
             | x == '/'  = '#'
             | not (isAlphaNum x || '-' == x) = '#'
             | otherwise = toLower x
-        titleFN = case parseRelFile (Prelude.toString (T.map noSpace title)) of 
+  in case parseRelFile (Prelude.toString (T.map noSpace title)) of 
                    Right aPath 
                     | parent aPath == $(mkRelDir ".")
                         -> aPath
                     | otherwise -> error ("Cannot create a title that isn't a valid filepath")    
                    Left e -> error (show e) -- TODO Exception!
 
+junkAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz࿀྿࿋℧⌘⍜αβδξεφγθιϊκλμνπψρστηωχζ"
+junkAlphabetLength = length junkAlphabet
 
+mkName :: Text -> IO Text
+mkName title = do
+   let titleFN = maulToFilename title
+   now <- getCurrentTime 
+   let (year,month,day) = utctDay now |> toGregorian 
+   let generate state n 
+        | n <= 0 = pure []
+        | otherwise = do
+            skips <- randomRIO (0,junkAlphabetLength)
+            let (char:stateNext) = drop skips state
+            rest <- generate stateNext (n-1)
+            pure (char:rest)
+   let 
+    hour = secondsToDiffTime (60*60)
+    secondsFromMidnight = utctDayTime now
+    between a b = secondsFromMidnight >= a*hour
+                    && secondsFromMidnight <= b*hour 
+    timeOfDay 
+        | between 0 6   = "night" 
+        | between 6 11  = "morning"
+        | between 11 13 = "midday"
+        | between 13 18 = "afternoon"
+        | between 18 24 = "evening"
+   junk <- generate (cycle junkAlphabet) 2
+   let uuid =   show year  <>"-"
+             <> show month <>"-"
+             <> show day   <>"-"
+             <> timeOfDay   <>"-"
+             <> Prelude.toText junk   <>"-"
+   pure (uuid <> Prelude.toText (toFilePath titleFN))
+
+
+mkNameOld :: Text -> IO Text
+mkNameOld title = do
+   let titleFN = maulToFilename title
    uuid <- nextRandom >>= Data.UUID.toString .> map toUpper .> Prelude.toText .> pure
    pure (uuid<>"-"<> Prelude.toText (toFilePath titleFN))
--- TODO: The above does all kinds of nasty with evil file paths
 
 create :: Text -> IO (Named Zettel)
 create title = do

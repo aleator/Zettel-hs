@@ -29,6 +29,7 @@ library
     , unordered-containers
     , typed-process
     , uuid
+    , random
     , text
     , directory
     , time
