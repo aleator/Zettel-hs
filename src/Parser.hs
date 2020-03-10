@@ -137,7 +137,7 @@ link = do
         Just thelines               -> unlines (onSameLine : thelines) |> Just |> pure
 
   Text.Megaparsec.many newline
-  pure (Link link desc ref)
+  pure (Link link (fmap T.strip desc) ref)
 
 singleLineRef = do
     ri <- refId
@@ -219,7 +219,7 @@ pprZettel zettel =
     <> "\n"
     <> unlines
          [  maybe "" (\ref -> "["<>ref<>"]: ") ref
-            <> maybe lnk (\d -> lnk <> " " <> d) desc
+            <> maybe lnk (\d -> lnk <> " " <> d) desc <> "\n"
          | Link lnk desc ref <- links zettel
          ]
     <> separatorLine

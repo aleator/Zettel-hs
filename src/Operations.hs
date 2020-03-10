@@ -9,8 +9,10 @@ import Data.UUID
 import Data.UUID.V4
 import Data.Char
 import Data.Time.Clock 
+import Data.Time.LocalTime 
 import Data.Time.Calendar 
 import Data.Text (Text)
+import Data.Char
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text as T
 import qualified Data.Aeson.Text as Aeson
@@ -37,13 +39,16 @@ maulToFilename title =
                     | otherwise -> error ("Cannot create a title that isn't a valid filepath")    
                    Left e -> error (show e) -- TODO Exception!
 
-junkAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz࿀྿࿋℧⌘⍜αβδξεφγθιϊκλμνπψρστηωχζ"
+junkAlphabet =
+    "0123456789" -- ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+     ++ [chr n | n <- [0x2190..0x2199] ++ [0x1900 ..0x191E] ++ [0x0F50 .. 0x0F6C] ] -- ++[0x21B0..0x21B7]++[0x27F0..0x27FF]]
 junkAlphabetLength = length junkAlphabet
 
 mkName :: Text -> IO Text
 mkName title = do
    let titleFN = maulToFilename title
    now <- getCurrentTime 
+   zone <- getCurrentTimeZone
    let (year,month,day) = utctDay now |> toGregorian 
    let generate state n 
         | n <= 0 = pure []
@@ -53,10 +58,8 @@ mkName title = do
             rest <- generate stateNext (n-1)
             pure (char:rest)
    let 
-    hour = secondsToDiffTime (60*60)
-    secondsFromMidnight = utctDayTime now
-    between a b = secondsFromMidnight >= a*hour
-                    && secondsFromMidnight <= b*hour 
+    LocalTime _ localTimeOfDay = utcToLocalTime zone now
+    between a b = todHour localTimeOfDay >= a && todHour localTimeOfDay < b 
     timeOfDay 
         | between 0 6   = "night" 
         | between 6 11  = "morning"
@@ -68,7 +71,7 @@ mkName title = do
              <> show month <>"-"
              <> show day   <>"-"
              <> timeOfDay   <>"-"
-             <> Prelude.toText junk   <>"-"
+             <> "⟦" <> Prelude.toText junk   <>"⟧-"
    pure (uuid <> Prelude.toText (toFilePath titleFN))
 
 
