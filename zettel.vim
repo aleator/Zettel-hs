@@ -19,14 +19,16 @@ function! ZettelSplit(current)
     echomsg(l:cmd)
     let l:result = system(l:cmd, @z)
     edit
-    execute ":sp " . l:result
+    call ZPopSplit(l:result)
+    "execute ":sp " . (l:result)
 endfunction
 
 function! ZExtend(title)
     let l:name = system("Zettel create --origin " . expand("%:t") . " --title " . a:title )
 	end
     edit
-    execute ":sp " . l:name
+    call ZPopSplit(l:name)
+    "execute ":sp " . (l:name)
 endfunction
 
 "function! ZExtend(title,...)
@@ -54,13 +56,17 @@ function! ZFindWikiLink(origin, ...)
  call feedkeys("i")
 endfunction
 
+function! ZPopSplit(name)
+    execute ":sp " . fnameescape(trim(a:name))
+endfunction
+
 function! ZResolve()
  execute 'normal!"zyi['
  echomsg("Zettel resolve --create --origin " . expand("%:t") . " -r '" . shellescape(@z) . "'")
  let l:name = system("Zettel resolve --create --origin " . expand("%:t") . " -r " . shellescape(@z) ) "TODO: USE SYSTEMLIST to open all files
  edit
  echo
-    execute ":sp " . l:name
+    call ZPopSplit(l:name)
 endfunction
 nmap <localleader>zr :call ZResolve()<CR>
 
@@ -69,7 +75,7 @@ command! -nargs=1 Zext !Zettel create --origin %:t --title <args>
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
     new
-    call termopen("Zettel neighbourhood --origin " . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    call termopen("Zettel neighbourhood --neighbourhood " . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
@@ -100,7 +106,7 @@ endfunction
 
 function! ZettelThread(origin)
     new
-    call termopen("Zettel thread --origin " . a:origin . "| fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o" , {'on_exit':'MyExitFunction'})
+    call termopen("Zettel neighbourhood --thread " . a:origin . "| fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o" , {'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
@@ -133,10 +139,12 @@ autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
 autocmd BufRead */zettel/* highlight ZInlineCode guifg=green
 " Match a zettelkasten wikilink
-autocmd BufRead */zettel/* match Comment /\[.\{-}\]/ 
-autocmd BufRead */zettel/* match Comment /\*.*\*/ 
-autocmd BufRead */zettel/* match ZInlineCode /\`.\{-}\`/ 
-autocmd BufRead */zettel/* match Keyword /External references/ 
-autocmd BufRead */zettel/* match Comment /-----.....................------------------------------------------------------/
+autocmd BufRead */zettel/* syn match Comment /\[.\{-}\]/ 
+autocmd BufRead */zettel/* syn match Comment /\*.*\*/ 
+autocmd BufRead */zettel/* syn match Keyword /\`.\{-}\`/ 
+autocmd BufRead */zettel/* syn match Keyword /External references/ 
+autocmd BufRead */zettel/* syn match Comment /─────.....................──────────────────────────────────────────────────────/
+autocmd BufRead */zettel/* syn match Comment /-----.....................------------------------------------------------------/
+autocmd BufRead */zettel/* setlocal cc=81
 " autocmd BufRead */zettel/* match Comment /........-....-....-....-............-.*/
 

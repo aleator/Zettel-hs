@@ -29,15 +29,26 @@ data Zettel = Zettel {title :: Text
     deriving (Generic,Show,Aeson.ToJSON,Aeson.FromJSON)
 
 parseSeparator :: Parsec Void Text ()
-parseSeparator = separatorLine $> ()
+parseSeparator = try (separatorLine $> ()) <|> try (unicodeSeparatorLine $> ())
 
 separatorLine :: IsString s => s
 separatorLine =
   "--------------------------------------------------------------------------------"
+unicodeSeparatorLine :: IsString s => s
+unicodeSeparatorLine =
+  "────────────────────────────────────────────────────────────────────────────────"
 
 referenceLine :: IsString s => s
 referenceLine =
   "----- External references ------------------------------------------------------"
+
+unicodeReferenceLine :: IsString s => s
+unicodeReferenceLine =
+  "───── External references ──────────────────────────────────────────────────────"
+
+isReferenceLine x = x == unicodeReferenceLine || x == referenceLine
+isSeparatorLine x = x == unicodeSeparatorLine || x == separatorLine
+
 
 parseIndentedLine :: Parsec Void Text Text
 parseIndentedLine = do
@@ -55,8 +66,8 @@ parseLine :: Parsec Void Text Text
 parseLine = do
   ln <- takeWhile1P Nothing (/= '\n')
   optional newline
-  when (ln == separatorLine) (fail "Not a line (found separator)")
-  when (ln == referenceLine) (fail "Not a line (found reference separator)")
+  when (isSeparatorLine ln) (fail "Not a line (found separator)")
+  when (isReferenceLine ln) (fail "Not a line (found reference separator)")
   pure ln
 
 parseTags :: Parsec Void Text [Text]
@@ -74,13 +85,13 @@ nonLinebreakingSpace c = Char.isSpace c && c /= '\n' -- TODO: Other linebreaks?
 word :: String -> Parsec Void Text Text
 word n = do
   w <- takeWhile1P (Just n) (not . (`elem` [' ', ',', '\t', '\n'])) --TODO
-  when (w == separatorLine) (fail "Unexpected Separator")
+  when (isSeparatorLine w) (fail "Unexpected Separator")
   pure w
 
 linkWord :: String -> Parsec Void Text Text
 linkWord n = do
   w <- takeWhile1P (Just n) (not . (`elem` [' ', '\t', '\n'])) --TODO
-  when (w == separatorLine) (fail "Unexpected Separator")
+  when (isSeparatorLine w) (fail "Unexpected Separator")
   pure w
 
 refLabel :: Parsec Void Text Text
@@ -182,7 +193,7 @@ zettel = do
 
   -- references
   refs <- optional <| do
-    referenceLine <* newline
+    try (referenceLine <|> unicodeReferenceLine) <* newline
     skipMany emptyLine
     Text.Megaparsec.many multilineRef
   
@@ -202,15 +213,15 @@ pprZettel :: Zettel -> Text
 pprZettel zettel =
   title zettel
     <> "\n"
-    <> separatorLine
+    <> unicodeSeparatorLine
     <> "\n"
     <> "\n"
     <> T.stripEnd (body zettel)
     <> "\n"
     <> "\n"
-    <> referenceLine <> "\n\n"
+    <> unicodeReferenceLine <> "\n\n"
     <> pprRefs (references zettel)
-    <> separatorLine
+    <> unicodeSeparatorLine
     <> "\n"
     <> "Tags: "
     <> T.intercalate ", " (tags zettel)
@@ -222,7 +233,7 @@ pprZettel zettel =
             <> maybe lnk (\d -> lnk <> " " <> d) desc <> "\n"
          | Link lnk desc ref <- links zettel
          ]
-    <> separatorLine
+    <> unicodeSeparatorLine
    where 
      pprRefs = map pprBib .> unlines
 

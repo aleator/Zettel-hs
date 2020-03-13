@@ -14,6 +14,7 @@ import           Parser -- TODO Make a Type module instead
 import           Operations
 import           Elucidations
 import           ZettelKasten
+import           Data.Tree
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.IO             as LT
 import qualified Data.Text.IO                  as T
@@ -42,25 +43,27 @@ import qualified Data.Aeson                    as Aeson
 
 data Commands
   = AddLinks FilePath (Maybe Text) (Maybe Text)
---   | Extend FilePath Text (Maybe Text) (Maybe Text)
-  -- | BuildClique CliqueType (Maybe Text)
   | Find (Maybe Text) HowToFind
   | Create Text (Maybe Text) (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
   | ExportAsJSON WhatToExport
-  | Neighbourhood Text
+  | Neighbourhood ChooseFrom
+  -- | Thread Text
   | Body Text
   | References Text
   | AddReferences Text (Target BibItem)
   | Elucidate
-  | Thread Text
   | FillLabels Text
   deriving (Eq, Show)
 
 data InitialContent = NoInitialContent | YesInitialContent deriving (Eq,Show)
 
 data Target a = This a | Choose ChooseFrom deriving (Eq,Show)
-data ChooseFrom = AllZettels | FromNeighbourhood Text deriving (Eq,Show)
+data ChooseFrom = AllZettels 
+                | FromNeighbourhood Text 
+                | FromOriginThread  Text 
+                | FromOriginTree    Text 
+                deriving (Eq,Show)
 
 data ResolveMissing = CreateNewByRefID | ReturnError
     deriving (Eq,Show)
@@ -76,6 +79,22 @@ data CliqueType = CliqueZettel Text | CrossLink
 
 data CreateLinks = DontAddLinks | DoAddLinks | AddLinksKeyword Text
  deriving (Eq,Show)
+
+argChooseFrom :: Parser ChooseFrom
+argChooseFrom = 
+    (flag' AllZettels (long "all-zettels" <> help "Select all zettels"))
+    <|>
+    (FromNeighbourhood 
+        <$> strOption (long "neighbourhood" <> help "Select neighbourhood of this zettel" <> metavar "ZETTEL"))
+    <|>
+    (FromOriginThread 
+        <$> strOption (long "thread" <> help "Select origin thread of this zettel" 
+                                     <> metavar "ZETTEL"))
+    <|>
+    (FromOriginTree
+        <$> strOption (long "tree" <> help "Select origin tree of this zettel" 
+                                     <> metavar "ZETTEL"))
+
 
 cmdExport :: Parser Commands
 cmdExport =
@@ -170,10 +189,9 @@ cmdAddReferences =
 
 
 cmdNeighbourhood :: Parser Commands
-cmdNeighbourhood =
-  Neighbourhood
-    <$> strOption
-          (long "origin" <> help "Zettel from which to search" <> metavar "ZETTEL")
+cmdNeighbourhood = Neighbourhood <$> argChooseFrom
+  --  <$> strOption
+  --        (long "origin" <> help "Zettel from which to search" <> metavar "ZETTEL")
 
 cmdResolveReference :: Parser Commands
 cmdResolveReference =
@@ -237,12 +255,12 @@ cmdFind =
         <|> pure FuzzyFindAll
         )
 
-cmdThread :: Parser Commands
-cmdThread =
-  Thread
-    <$> strOption (long "origin" <> metavar "ZETTEL" <> help
-                  "Zettel to start following Origin thread from"
-                )
+-- cmdThread :: Parser Commands
+-- cmdThread =
+--   Thread
+--     <$> strOption (long "origin" <> metavar "ZETTEL" <> help
+--                   "Zettel to start following Origin thread from"
+--                 )
 
 cmdFillLabels :: Parser Commands
 cmdFillLabels =
@@ -268,7 +286,7 @@ cmdCommands = subparser
   <> cmd cmdBody "body" "Extract zettel body, ie. text without headers and links"
   <> cmd cmdReferences "references" "Extract references from a Zettel"
   <> cmd cmdAddReferences "addreferences" "Add references to a Zettel"
-  <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
+--  <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
   <> cmd cmdFillLabels "auto-fill" "Fill missing wikilinks and references from origin"
   )
  where
@@ -436,15 +454,37 @@ main = do
             prettyPrint (map snd sampled )|> putTextLn
             decreaseElucidationPs conn 0.7 (map (second hashElucidation) sampled)
 
-    Neighbourhood zettelName -> do
-        allZettels <- listZettels zettelkasten
-        linkStructure <- getLinkStructure zettelkasten allZettels
-        let neighbours = neighbourhoodAndLinks allZettels linkStructure
-                                zettelName
-        -- mapM_ putTextLn neighbours
-        let neighbourLinks = [Link x Nothing Nothing
-                             | x <- HashSet.toList neighbours ]
-        mapM_ (printLink zettelkasten) neighbourLinks
+    Neighbourhood area -> 
+        case area of
+            FromNeighbourhood zettelName -> do
+                allZettels <- listZettels zettelkasten
+                linkStructure <- getLinkStructure zettelkasten allZettels
+                let neighbours = neighbourhoodAndLinks allZettels linkStructure
+                                        zettelName
+                let neighbourLinks = [Link x Nothing Nothing
+                                     | x <- HashSet.toList neighbours ]
+                mapM_ (printLink zettelkasten) neighbourLinks
+
+            FromOriginThread zettelName -> do
+                origins <- originChain zettelkasten zettelName
+                traverse_ (printLink zettelkasten) origins
+
+            FromOriginTree zettelName -> do
+                allZettels <- listZettels zettelkasten
+                linkStructure <- getLinkStructure zettelkasten allZettels
+                let originT = originTree linkStructure zettelName
+                putStrLn (drawTree (fmap toString originT))
+                -- mapM_ (printLink zettelkasten) neighbourLinks
+
+            AllZettels -> do
+                allZettels <- listZettels zettelkasten
+                mapM_ (printLink zettelkasten) allZettels
+
+
+    --Thread zettelName -> do
+    --    -- Assume that there is only a single origin to keep this simple.
+    --    origins <- originChain zettelkasten zettelName
+    --    traverse_ (printLink zettelkasten) origins
 
     Body zettelNameOrFilename -> do
         zettel <- readZettelFromNameOrFilename zettelkasten zettelNameOrFilename
@@ -452,15 +492,12 @@ main = do
 
     References zettelNameOrFilename -> do
         zettel <- readZettelFromNameOrFilename zettelkasten zettelNameOrFilename
-        namedValue zettel |> references 
+        namedValue zettel 
+            |> references 
             |> traverse_ (pprBib 
                           .> T.map (\x -> if x=='\n' then ' ' else x) 
                           .> putTextLn)
 
-    Thread zettelName -> do
-        -- Assume that there is only a single origin to keep this simple.
-        origins <- originChain zettelkasten zettelName
-        traverse_ (printLink zettelkasten) origins
 
     FillLabels zettelName -> do
         -- Assume that there is only a single origin to keep this simple.
@@ -558,11 +595,26 @@ newtype TantivyOutput = TantivyOutput {identifier :: [Text]}
 
 -- Find the 'neighbourhood' of the zettel. 
 neighbourhoodAndLinks :: [Link] -> LinkStructure -> Text -> HashSet Text
-neighbourhoodAndLinks links ls@(LS thisLinksTo thisHasLinkFrom) zettelName 
+neighbourhoodAndLinks links ls@(LS thisLinksTo thisHasLinkFrom _) zettelName 
     = let
         fromHere = mLookup zettelName thisLinksTo  
         (parents,siblings) =  neighbourhood links ls zettelName
       in fromHere <> siblings <> parents
+
+-- Find origin tree of zettel
+originTree :: LinkStructure -> Text -> (Tree Text)
+originTree linkStructure zettelName 
+    = let
+       backlinks = [ backlinker :: Text
+                   | backlinker <- HashSet.toList 
+                                   (mLookup zettelName (hasLinkFrom linkStructure))
+                   , "Origin" `HashSet.member`
+                         (mLookup
+                             (backlinker,zettelName)
+                             (linkLabel linkStructure))
+                   ]
+      in Node zettelName (map (originTree linkStructure) backlinks)
+
 
 -- Find the origin chain of a zettel
 originChain :: ZettelKasten -> Text -> IO [Link]
@@ -580,7 +632,7 @@ originChain zettelkasten zettelName =
 mLookup key hashmap = HashMap.lookup key hashmap |> fromMaybe mempty 
 
 neighbourhood :: [Link] -> LinkStructure -> Text -> (HashSet Text, HashSet Text)
-neighbourhood links (LS thisLinksTo thisHasLinkFrom) zettelName =
+neighbourhood links (LS thisLinksTo thisHasLinkFrom _) zettelName =
     let 
       linkedFrom = fromMaybe mempty (HashMap.lookup zettelName thisHasLinkFrom)
       siblings   = flip foldMap linkedFrom $ \linkingZettel ->
