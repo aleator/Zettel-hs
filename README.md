@@ -23,15 +23,16 @@ Available options:
 Available commands:
   create                   Create unlinked zettel
   link                     Link zettels
-  extend                   Create new zettel and link it to original
   find                     Find zettels
   resolve                  Resolve references in zettels
-  clique                   Build cliques by cross linking selected zettels
   export                   Export zettels as JSON
   elucidate                Suggest improvements in ZettelKasten
   neighbourhood            Zettels linkwise near to this one
   body                     Extract zettel body, ie. text without headers and
                            links
+  references               Extract references from a Zettel
+  addreferences            Add references to a Zettel
+  auto-fill                Fill missing wikilinks and references from origin
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)
@@ -103,13 +104,35 @@ own personal system instead.
 
 There is a somewhat badly behaving [vim integration](zettel.vim). Add
 `source <path where you put it>/zettel.vim` to your init.vim or vimrc to
-enable it. It provides the following commands
-* `<localleader>zf` -- Spawn fzf to find zettels.
-* `<localleader>zg` -- Find zettels whose topic includes term under cursor
-* `<localleader>zn` -- Find zettels that link to this zettel and their links
-* `<localleader>zl` -- Add links to this zettel
-* `<localleader>zw` -- If invoked on a [wikilink] spawns fzf to add link to existing zettel. 
-* `<localleader>zr` -- If invoked on a [wikilink] navigates to linked zettel. If there is no pre-existing zettel/link it creates an empty zettel.
+enable it. Here is a quick user quide
+
+## Commands
+
+`:ZFill` : Automatically *fill* in links and refs from origin zettel
+`:Zlnk`  : Spawn fzf to gather *links* for this zettel
+`:Zf`    : Do *full text search* on arqument. (See [tantivy])
+
+## Mappings (prefix with localleader)
+    
+### Manipulation
+`zl`    : Add *Links* to call zettel 
+`zw`    : Add *WikiLinks* to zettel 
+`zs`    : *Split visual selection* to a new zettel (see ZFill above)
+
+### Creation & Navigation
+`zr`    : *Navigate to wikilink*. Creates the link if it doesn't
+        exist
+
+## Navigation (& creation)
+`zf`    : *Find* a zettel (type a new title, or press <ctrl-n> to 
+        create a new zettel)
+`zg`    : *Fuzzy find*, but limit to word under cursor (TODO: Do full
+        text find for this!)
+`zf`    : *Fuzzy find* zettel by title
+
+## Network local discovery 
+`zn`    : Show *neighbourhood* of the zettel
+`zt`    : Show *origin chain* of the zettel
 
 Zettels can be created using the command `:Zext 'title for new zettel'`. This
 also creates a bidirectional link between currently viewed zettel and the new
