@@ -68,7 +68,7 @@ Links:
 
 
 
-## Status
+# Status
 
 This is a program build by me and for me. It misbehaves every now and then,
 but since I and it are on familiar terms, it doesn't really matter.
@@ -77,7 +77,7 @@ But, if you decide to use it, this might matter a lot. Unless you like
 debugging and fixing issues, it might be better for you to write your
 own personal system instead.
 
-## Supported features
+# Supported features
 
 * Structured zettels
 * External (bibliographic) references
@@ -100,49 +100,48 @@ own personal system instead.
   vim. But they are easy to find using `Zettel find -q 'anything'`,
   so I've not bothered to do anything about this.
 
-## Vim integration
+# Vim integration
 
 There is a somewhat badly behaving [vim integration](zettel.vim). Add
 `source <path where you put it>/zettel.vim` to your init.vim or vimrc to
-enable it. Here is a quick user quide
+enable it. Here is a quick user quide:
 
 ## Commands
 
-`:ZFill` : Automatically *fill* in links and refs from origin zettel
-`:Zlnk`  : Spawn fzf to gather *links* for this zettel
-`:Zf`    : Do *full text search* on arqument. (See [tantivy])
+* `:Zcre <arg>`  : Create a new zettel with this name (Use only for topics)
+* `:Zext <arg>`  : Extend current zettel with addition of linked zettel (use often)
+* `:ZFill` : Automatically *fill* in links and refs from origin zettel
+* `:Zf`    : Do *full text search* on arqument. 
 
 ## Mappings (prefix with localleader)
     
 ### Manipulation
-`zl`    : Add *Links* to call zettel 
-`zw`    : Add *WikiLinks* to zettel 
-`zs`    : *Split visual selection* to a new zettel (see ZFill above)
+
+* `zl`    : Add *Links* to call zettel 
+* `zw`    : Add *WikiLinks* to zettel 
+* `zs`    : *Split visual selection* to a new zettel (see ZFill above)
 
 ### Creation & Navigation
-`zr`    : *Navigate to wikilink*. Creates the link if it doesn't
+
+* `zr`    : *Navigate to wikilink*. Creates the link if it doesn't
         exist
 
-## Navigation (& creation)
-`zf`    : *Find* a zettel (type a new title, or press <ctrl-n> to 
+### Navigation (& creation)
+
+* `zf`    : *Find* a zettel (type a new title, or press <ctrl-n> to 
         create a new zettel)
-`zg`    : *Fuzzy find*, but limit to word under cursor (TODO: Do full
+* `zg`    : *Fuzzy find*, but limit to word under cursor (TODO: Do full
         text find for this!)
-`zf`    : *Fuzzy find* zettel by title
+* `zf`    : *Fuzzy find* zettel by title
 
-## Network local discovery 
-`zn`    : Show *neighbourhood* of the zettel
-`zt`    : Show *origin chain* of the zettel
+### Network local discovery 
 
-Zettels can be created using the command `:Zext 'title for new zettel'`. This
-also creates a bidirectional link between currently viewed zettel and the new
-one, called the Origin-link.  
-
-If you want an unlinked zettel, the command `:Zcre 'title for new zettel'`
-creates one.
+* `zn`    : Show *neighbourhood* of the zettel
+* `zt`    : Show *origin chain* of the zettel
 
 You can also create new zettels by invoking find and then typing a title which
-produces no find results. This is the fastest way.
+produces no find results (or if you can't do that, type title and press <ctrl>-n).
+This is the fastest way to create zettels.
 
 ## Shell integration
 
