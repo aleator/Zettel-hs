@@ -126,8 +126,7 @@ endfunction
 command! -nargs=0 ZFill :!zettel auto-fill --target %:t
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
-vmap <localleader>zs :call ZettelSplit(expand('%:t'))<CR>
-"nmap <localleader>zs :call ZettelSplit(expand('%:t'))<CR>
+vmap <localleader>zs :<c-u>call ZettelSplit(expand('%:t'))<CR>
 nmap <localleader>zf :call ZettelFind(expand('%:t'),'')<CR>
 nmap <localleader>zg :call ZettelFind(expand('%:t'),expand('<cword>'))<CR>
 nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>

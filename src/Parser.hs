@@ -29,7 +29,8 @@ data Zettel = Zettel {title :: Text
     deriving (Generic,Show,Aeson.ToJSON,Aeson.FromJSON)
 
 parseSeparator :: Parsec Void Text ()
-parseSeparator = try (separatorLine $> ()) <|> try (unicodeSeparatorLine $> ())
+parseSeparator = try ((separatorLine <?> "Ascii section separator") $> ())
+  <|> try ((unicodeSeparatorLine <?> "Unicode section separator") $> ())
 
 separatorLine :: IsString s => s
 separatorLine =
@@ -73,9 +74,11 @@ parseLine = do
 parseTags :: Parsec Void Text [Text]
 parseTags = do
   chunk "Tags:"
-  satisfy (`elem` [' ', '\t']) 
-  let tag = takeWhile1P (Just "Tag") (not . (`elem` [',', '\n'])) --TODO
-  sepBy (tag <* linespace) ("," <* linespace) -- <* newline
+  (do 
+     satisfy (`elem` [' ', '\t']) 
+     let tag = takeWhile1P (Just "Tag") (not . (`elem` [',', '\n'])) --TODO
+     sepBy (tag <* linespace) ("," <* linespace)
+   ) <|> pure []
 
 linespace :: Parsec Void Text ()
 linespace = skipMany (satisfy nonLinebreakingSpace)
@@ -186,7 +189,7 @@ textChunks originFile input
 
 zettel :: Parsec Void Text Zettel
 zettel = do
-  title <- parseLine <* parseSeparator <* newline
+  title <- (parseLine <?> "titleLine") <* parseSeparator <* newline
   skipMany emptyLine
   body <- optional 
     (unlines <$> Text.Megaparsec.some (try parseLine <|> (newline $> "")))

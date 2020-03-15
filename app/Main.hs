@@ -63,6 +63,7 @@ data ChooseFrom = AllZettels
                 | FromNeighbourhood Text 
                 | FromOriginThread  Text 
                 | FromOriginTree    Text 
+                | FromBackLinks     Text 
                 deriving (Eq,Show)
 
 data ResolveMissing = CreateNewByRefID | ReturnError
@@ -394,7 +395,8 @@ main = do
                                              title
       traverse_ (saveZettel zettelkasten) modifiedOriginal
       
-      let zettel = fmap (\z->z{body=initialContent}) created
+      let zettel' = fmap (\z->z{body=initialContent}) created
+      zettel <- fillMissingLinks zettelkasten zettel'
       
       searchResults   <- case doAddLinks of
         DontAddLinks       -> pure Nothing
@@ -476,6 +478,14 @@ main = do
                 putStrLn (drawTree (fmap toString originT))
                 -- mapM_ (printLink zettelkasten) neighbourLinks
 
+            FromBackLinks zettelName -> do
+                allZettels <- listZettels zettelkasten
+                linkStructure <- getLinkStructure zettelkasten allZettels
+                let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
+                traverse_ ((\x -> Link x Nothing Nothing) 
+                           .> printLink zettelkasten) 
+                          backlinks
+
             AllZettels -> do
                 allZettels <- listZettels zettelkasten
                 mapM_ (printLink zettelkasten) allZettels
@@ -502,23 +512,7 @@ main = do
     FillLabels zettelName -> do
         -- Assume that there is only a single origin to keep this simple.
         zettel <- loadZettel zettelkasten zettelName
-        let labels = getPotentialLabels zettel
-        when (null labels) exitSuccess
-        case findOriginLink (namedValue zettel) of
-            Nothing -> errorExit ("There is no origin link" :: Text)
-            Just origin -> do
-                        originZettel <- loadZettel zettelkasten 
-                                          (linkTarget origin)
-                        let lnks = [lnk | lnk <- links (namedValue originZettel)
-                                        , ref <- maybeToList (refNo lnk)
-                                        , ref `elem` labels ]
-                        let originRefs = [bib | bib <- references   
-                                                    (namedValue originZettel)
-                                          , bibKey bib `elem` labels ]
-                        fmap (addLinks lnks) zettel 
-                            |> fmap (addReferences originRefs)
-                            |> saveZettel zettelkasten
-                        pure ()
+        fillMissingLinks zettelkasten zettel >>= saveZettel zettelkasten
 
 
 readZettelFromNameOrFilename zettelkasten zettelNameOrFilename =
@@ -638,6 +632,28 @@ neighbourhood links (LS thisLinksTo thisHasLinkFrom _) zettelName =
       siblings   = flip foldMap linkedFrom $ \linkingZettel ->
                      mLookup linkingZettel thisLinksTo 
     in (linkedFrom,siblings)
+
+fillMissingLinks zettelkasten zettel =
+  let labels = getPotentialLabels zettel
+  in  if null labels
+        then pure zettel
+        else case findOriginLink (namedValue zettel) of
+          Nothing     -> pure zettel
+          Just origin -> do
+            originZettel <- loadZettel zettelkasten (linkTarget origin)
+            let lnks =
+                  [ lnk
+                  | lnk <- links (namedValue originZettel)
+                  , ref <- maybeToList (refNo lnk)
+                  , ref `elem` labels
+                  ]
+            let originRefs =
+                  [ bib
+                  | bib <- references (namedValue originZettel)
+                  , bibKey bib `elem` labels
+                  ]
+            pure (fmap (addLinks lnks .> addReferences originRefs) zettel)
+
 
 -- Store metadata
 
