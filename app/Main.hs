@@ -47,7 +47,7 @@ data Commands
   | Create Text (Maybe Text) (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
   | ExportAsJSON WhatToExport
-  | Neighbourhood ChooseFrom
+  | Neighbourhood ForWho ChooseFrom
   -- | Thread Text
   | Body Text
   | References Text
@@ -55,6 +55,8 @@ data Commands
   | Elucidate
   | FillLabels Text
   deriving (Eq, Show)
+
+data ForWho = Human | Computer deriving (Show,Eq)
 
 data InitialContent = NoInitialContent | YesInitialContent deriving (Eq,Show)
 
@@ -190,7 +192,11 @@ cmdAddReferences =
 
 
 cmdNeighbourhood :: Parser Commands
-cmdNeighbourhood = Neighbourhood <$> argChooseFrom
+cmdNeighbourhood = 
+    Neighbourhood 
+      <$> (flag Computer Human 
+            (long "human"<>help "Human readable output where sensible"))
+      <*> argChooseFrom
   --  <$> strOption
   --        (long "origin" <> help "Zettel from which to search" <> metavar "ZETTEL")
 
@@ -456,8 +462,10 @@ main = do
             prettyPrint (map snd sampled )|> putTextLn
             decreaseElucidationPs conn 0.7 (map (second hashElucidation) sampled)
 
-    Neighbourhood area -> 
-        case area of
+    Neighbourhood forWho area -> 
+        let asLink :: Text -> Link
+            asLink path = Link path Nothing Nothing
+        in case area of
             FromNeighbourhood zettelName -> do
                 allZettels <- listZettels zettelkasten
                 linkStructure <- getLinkStructure zettelkasten allZettels
@@ -475,16 +483,18 @@ main = do
                 allZettels <- listZettels zettelkasten
                 linkStructure <- getLinkStructure zettelkasten allZettels
                 let originT = originTree linkStructure zettelName
-                putStrLn (drawTree (fmap toString originT))
-                -- mapM_ (printLink zettelkasten) neighbourLinks
+                case forWho of
+                    Human -> fmap toString originT |> drawTree |> 
+                                putStrLn 
+                    Computer -> traverse_ 
+                                    (asLink .> printLink zettelkasten) 
+                                    originT
 
             FromBackLinks zettelName -> do
                 allZettels <- listZettels zettelkasten
                 linkStructure <- getLinkStructure zettelkasten allZettels
                 let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
-                traverse_ ((\x -> Link x Nothing Nothing) 
-                           .> printLink zettelkasten) 
-                          backlinks
+                traverse_ ( asLink .> printLink zettelkasten) backlinks
 
             AllZettels -> do
                 allZettels <- listZettels zettelkasten

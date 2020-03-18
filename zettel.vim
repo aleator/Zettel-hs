@@ -1,3 +1,10 @@
+
+function! PasteQuote()
+    let quote = system("pbpaste")
+    let formatted = system("pandoc -fmarkdown -tmarkdown","> " . l:quote)
+    execute "normal! i" . l:formatted . "\<Esc>"
+endfunction
+
 function! ZCreate(title)
     let g:zettel_start_buffer = bufnr('%')
     call termopen("Zettel create --dolink --title " . a:title . " | xargs nvr -o",{'on_exit':'MyExitFunction'})
@@ -23,12 +30,12 @@ function! ZettelSplit(current)
     "execute ":sp " . (l:result)
 endfunction
 
-function! ZExtend(title)
-    let l:name = system("Zettel create --origin " . expand("%:t") . " --title " . a:title )
-	end
+function! ZExtend(origin,title)
+    let l:cmd =  "Zettel create --origin " . a:origin . " --title " . shellescape(a:title)
+    let l:name = system(l:cmd)
+    echomsg(cmd,l:name)
     edit
     call ZPopSplit(l:name)
-    "execute ":sp " . (l:name)
 endfunction
 
 "function! ZExtend(title,...)
@@ -68,9 +75,7 @@ function! ZResolve()
  echo
     call ZPopSplit(l:name)
 endfunction
-nmap <localleader>zr :call ZResolve()<CR>
 
-command! -nargs=1 Zext !Zettel create --origin %:t --title <args>
 
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
@@ -88,10 +93,25 @@ function! ZettelFind(origin, kw)
     call feedkeys("i")
 endfunction
 
-function! ZettelFullFind(kw)
+function! ZettelFindVisualSelection()
+ normal gv"zy
+ let args = split(@z)
+ let list = []
+ for i in l:args
+   call add(list,'+' . i)
+ endfor
+ call ZettelFullFind('',join(l:list,' '))
+endfunction
+
+function! ZettelFullFind(x,...)
     let g:zettel_start_buffer = bufnr('%')
     new
-    call termopen("Zettel find -q" . shellescape(a:kw) . " | fzf | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    if a:0 > 0
+        call termopen("Zettel find -q" . shellescape(a:1) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
+    else 
+        let searchTerm = input("Search> ")
+        call termopen("Zettel find -q" . shellescape(l:searchTerm) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
+    endif
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
@@ -104,9 +124,11 @@ function! MyExitFunction(a,b,c)
  execute 'bd! ' . g:zettel_buffer 
 endfunction 
 
+let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
+
 function! ZettelThread(origin)
     new
-    call termopen("Zettel neighbourhood --thread " . a:origin . "| fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o" , {'on_exit':'MyExitFunction'})
+    call termopen("Zettel neighbourhood --thread " . a:origin . g:fzf_xargs_vim , {'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
@@ -126,13 +148,21 @@ endfunction
 command! -nargs=0 ZFill :!zettel auto-fill --target %:t
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
+command! -nargs=1 Zext call ZExtend(expand("%:t"),<q-args>)
+
+nmap <localleader>zr :call ZResolve()<CR>
+nmap <localleader>ze :call ZExtend(expand("%:t"),input('Note title> '))<CR>
 vmap <localleader>zs :<c-u>call ZettelSplit(expand('%:t'))<CR>
 nmap <localleader>zf :call ZettelFind(expand('%:t'),'')<CR>
+nmap <localleader>zFF :call ZettelFullFind('',expand('<cword>')<CR>
+vmap <localleader>zF :<c-u>call ZettelFindVisualSelection()<CR>
+nmap <localleader>zF :call ZettelFullFind('')<CR>
 nmap <localleader>zg :call ZettelFind(expand('%:t'),expand('<cword>'))<CR>
 nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>
 nmap <localleader>zt :call ZettelThread(expand('%:t'))<CR>
 nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
+nmap <localleader>zp :call PasteQuote()<CR>
 
 autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
