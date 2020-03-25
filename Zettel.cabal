@@ -28,6 +28,7 @@ library
     , flow
     , unordered-containers
     , typed-process
+    , bytestring
     , uuid
     , random
     , text
@@ -55,6 +56,7 @@ executable Zettel
                      , file-embed
                      , bytestring
                      , text
+                     , bytestring
                      , directory
                      , containers
                      , unordered-containers

@@ -42,7 +42,7 @@ import qualified Data.Aeson                    as Aeson
 
 
 data Commands
-  = AddLinks FilePath (Maybe Text) (Maybe Text)
+  = AddLinks FilePath (AutoMaybe Text) (Maybe Text)
   | Find (Maybe Text) HowToFind
   | Create Text (Maybe Text) (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
@@ -55,6 +55,8 @@ data Commands
   | Elucidate
   | FillLabels Text
   deriving (Eq, Show)
+
+data AutoMaybe a = Auto | No | Use a  deriving (Eq,Show,Read,Generic)
 
 data ForWho = Human | Computer deriving (Show,Eq)
 
@@ -75,9 +77,6 @@ data HowToFind = KeywordSearch Text | FuzzyFindAll | FullTextSearch TantivySear
     deriving (Eq,Show)
 
 data WhatToExport = ExportAll | ExportSearch (Maybe Text)
-    deriving (Eq,Show)
-
-data CliqueType = CliqueZettel Text | CrossLink
     deriving (Eq,Show)
 
 data CreateLinks = DontAddLinks | DoAddLinks | AddLinksKeyword Text
@@ -216,8 +215,9 @@ cmdAddLinks =
   AddLinks
     <$> strOption
           (long "origin" <> help "Zettel to add links to" <> metavar "ZETTEL")
-    <*> optional
-          (strOption (long "reference" <> short 'r' <> metavar "REFERENCE"))
+    <*> (    (flag' Auto (long "ask"<>help "Ask for labels"))
+         <|> (Use <$> strOption (long "reference" <> short 'r' <> metavar "REFERENCE"))
+         <|> pure No)
     <*> optional
           (strOption (long "search" <> short 's' <> metavar "SEARCH_TERM"))
 
@@ -322,23 +322,36 @@ main = do
     AddLinks origin maybeReference maybeSearch -> do
       zettel   <- loadZettel zettelkasten (toText origin)
       searchResults <- keywordSearch zettelkasten maybeSearch
+      let askForLabels theLinks = do 
+                        zettels <- listZettels zettelkasten
+                        links <- getLinkStructure zettelkasten zettels
+                        let getLabelFor (Link linkTarget desc ref) = do
+                                lbl <- findLabelsFor links linkTarget 
+                                        >>= (filter (/="") .> ordNub .> selectLabels)
+                                pure (Link linkTarget desc (Just lbl))
+                        labeled <- traverse getLabelFor theLinks 
+                        pure labeled
+
+      let printLabels labeledLinks = mapM_ putTextLn ([ref | Link _ _ ref' <- labeledLinks, ref <- maybeToList ref'])
+
       case searchResults of
         Links theLinks -> case maybeReference of
-            Nothing  -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
-            Just ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
-        CreateNew _ _  -> errorExit ("links command can't create new zettels"::LText)
-      pass
+                           No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
+                           Use ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
+                           Auto    -> do
+                                        labeledLinks <- askForLabels theLinks 
+                                        saveZettel zettelkasten (addLinks labeledLinks <$> zettel)
+                                        printLabels labeledLinks
+                                        
+        CreateNew title links  -> do
+            original <- loadZettel zettelkasten (toText origin)
+            (newOriginal,newZettel) <- createLinked original Nothing Nothing title
+            fmap (addLinks links) newZettel |> saveZettel zettelkasten
+            labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
+            saveZettel zettelkasten (addLinks labeledLinks <$> newOriginal)
+            printLabels labeledLinks
 
-   -- Extend origin newTitle maybeReferenceID maybeRelation -> do
-   --   original                    <- loadZettel zettelkasten (toText origin)
-   --   (modifiedOriginal, created) <- createLinked original
-   --                                               maybeReferenceID
-   --                                               maybeRelation
-   --                                               newTitle
-   --   saveZettel zettelkasten modifiedOriginal
-   --   saveZettel zettelkasten created
-   --   let linkToCreated = Link (name created) Nothing maybeReferenceID
-   --   linkToFile zettelkasten linkToCreated >>= toFilePath .> putStrLn
+      pass
 
     Find mOrigin howToFind -> do
       searchResults <- case howToFind of
@@ -360,30 +373,6 @@ main = do
             fmap (addLinks links) zettel |> saveZettel zettelkasten
             linkToFile zettelkasten (linkTo zettel) >>= toFilePath .> putStrLn
         Links links -> traverse_ (linkToFile zettelkasten >=> toFilePath .> putStrLn) links
-
-    --BuildClique cliqueType maybeKeyword -> do
-    --  links <- keywordSearch zettelkasten maybeKeyword >>= \case 
-    --            Links lnks -> pure lnks
-    --            CreateNew  _ _ -> errorExit ("Clique can't create new zettels"::LText)
-    --  case cliqueType of
-    --    CrossLink -> do
-    --      for_ links $ \lnk -> do
-    --        zettel <- loadZettel zettelkasten (linkTarget lnk)
-    --        fmap (addLinks (filter (/= lnk) links)) zettel
-    --          |> saveZettel zettelkasten
-
-    --    CliqueZettel title -> do
-    --      cliqueZettel <- create title
-    --      fmap (addLinks links) cliqueZettel |> saveZettel zettelkasten
-    --      for_ links $ \lnk -> do
-    --        linkedZettel <- loadZettel zettelkasten (linkTarget lnk)
-    --        fmap
-    --            (addLinks [Link (name cliqueZettel) (Just "Clique link") Nothing])
-    --            linkedZettel
-    --          |> saveZettel zettelkasten
-    --        linkToFile zettelkasten (linkTo cliqueZettel)
-    --          >>= toFilePath
-    --          .>  putStrLn
 
     Create title mOrigin mRefId doAddLinks addInitialContent -> do
       initialContent <- case addInitialContent of

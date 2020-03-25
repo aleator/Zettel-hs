@@ -1,4 +1,4 @@
-
+scriptencoding utf-8
 function! PasteQuote()
     let quote = system("pbpaste")
     let formatted = system("pandoc -fmarkdown -tmarkdown","> " . l:quote)
@@ -33,7 +33,7 @@ endfunction
 function! ZExtend(origin,title)
     let l:cmd =  "Zettel create --origin " . a:origin . " --title " . shellescape(a:title)
     let l:name = system(l:cmd)
-    echomsg(cmd,l:name)
+    "echomsg(cmd,l:name)
     edit
     call ZPopSplit(l:name)
 endfunction
@@ -69,8 +69,8 @@ endfunction
 
 function! ZResolve()
  execute 'normal!"zyi['
- echomsg("Zettel resolve --create --origin " . expand("%:t") . " -r '" . shellescape(@z) . "'")
- let l:name = system("Zettel resolve --create --origin " . expand("%:t") . " -r " . shellescape(@z) ) "TODO: USE SYSTEMLIST to open all files
+ echomsg('Zettel resolve --create --origin ' . expand('%:t') . " -r '" . shellescape(@z) . "'")
+ let l:name = system('Zettel resolve --create --origin ' . expand('%:t') . " -r " . shellescape(@z) ) "TODO: USE SYSTEMLIST to open all files
  edit
  echo
     call ZPopSplit(l:name)
@@ -80,9 +80,9 @@ endfunction
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
     new
-    call termopen("Zettel neighbourhood --neighbourhood " . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    call termopen('Zettel neighbourhood --neighbourhood ' . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
-    call feedkeys("i")
+    call feedkeys('i')
 endfunction
 
 function! ZettelFind(origin, kw)
@@ -90,7 +90,7 @@ function! ZettelFind(origin, kw)
     new
     call termopen("Zettel find --origin " . a:origin . " " . a:kw . " | xargs nvr -o",{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
-    call feedkeys("i")
+    call feedkeys('i')
 endfunction
 
 function! ZettelFindVisualSelection()
@@ -107,14 +107,22 @@ function! ZettelFullFind(x,...)
     let g:zettel_start_buffer = bufnr('%')
     new
     if a:0 > 0
-        call termopen("Zettel find -q" . shellescape(a:1) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
+        call termopen('Zettel find -q' . shellescape(a:1) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
     else 
-        let searchTerm = input("Search> ")
-        call termopen("Zettel find -q" . shellescape(l:searchTerm) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
+        let searchTerm = input('Search> ')
+        call termopen('Zettel find -q' . shellescape(l:searchTerm) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
     endif
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
+
+function! MyExitFunctionWithAppend(a,b,c)   
+ call MyExitFunction(a:a,a:b,a:c)
+ edit
+ call setpos(".",g:zettel_cursor_pos)
+ execute "normal! i[" . g:zettel_input . "]\<Esc>"
+ write
+endfunction 
 
 function! MyExitFunction(a,b,c)   
  echomsg('zb' . g:zettel_buffer)
@@ -133,12 +141,20 @@ function! ZettelThread(origin)
     call feedkeys("i")
 endfunction
 
+function! AddZInput(x)
+    echomsg("Input added")
+    echomsg(a:x)
+    let g:zettel_input=a:x
+endfunction
+
 function! ZettelLink(origin,...)
+    let g:zettel_cursor_pos = getpos(".")
     new
 	if a:0 > 0 
         call termopen("Zettel link --origin " . a:origin . " --search " . a:1,{'on_exit':'MyExitFunction'})
     else
-        call termopen("Zettel link --origin " . a:origin,{'on_exit':'MyExitFunction'})
+        let l:cmd = ("Zettel link --ask --origin " . shellescape(a:origin) . ' | xargs -I {} nvr -c"call AddZInput(''{}'')"')
+        call termopen(l:cmd,{'on_exit':'MyExitFunctionWithAppend'})
     end
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
@@ -164,6 +180,7 @@ nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
 nmap <localleader>zp :call PasteQuote()<CR>
 
+augroup zettel
 autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
 autocmd BufRead */zettel/* highlight ZInlineCode guifg=green
@@ -176,4 +193,5 @@ autocmd BufRead */zettel/* syn match Comment /─────...................
 autocmd BufRead */zettel/* syn match Comment /-----.....................------------------------------------------------------/
 autocmd BufRead */zettel/* setlocal cc=81
 " autocmd BufRead */zettel/* match Comment /........-....-....-....-............-.*/
+augroup END
 
