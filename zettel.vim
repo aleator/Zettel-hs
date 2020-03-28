@@ -7,7 +7,7 @@ endfunction
 
 function! ZCreate(title)
     let g:zettel_start_buffer = bufnr('%')
-    call termopen("Zettel create --dolink --title " . a:title . " | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    call termopen("Zettel create --dolink --title " . a:title . " " . g:launch_vim,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
 endfunction
@@ -64,7 +64,7 @@ function! ZFindWikiLink(origin, ...)
 endfunction
 
 function! ZPopSplit(name)
-    execute ":sp " . fnameescape(trim(a:name))
+    execute ":e " . fnameescape(trim(a:name))
 endfunction
 
 function! ZResolve()
@@ -76,19 +76,21 @@ function! ZResolve()
     call ZPopSplit(l:name)
 endfunction
 
-
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
-    new
-    call termopen('Zettel neighbourhood --neighbourhood ' . a:origin . " | fzf -d '-' --with-nth 6.. --preview 'zettel body --origin {}' | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    " new
+    call termopen('Zettel neighbourhood --neighbourhood ' . a:origin . " | fzf -d '-' --multi --with-nth 6.. --preview 'zettel body --origin {}' " . g:launch_vim ,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
 endfunction
 
 function! ZettelFind(origin, kw)
     let g:zettel_start_buffer = bufnr('%')
-    new
-    call termopen("Zettel find --origin " . a:origin . " " . a:kw . " | xargs nvr -o",{'on_exit':'MyExitFunction'})
+    "new
+    let l:cmdo = "Zettel find --origin " . a:origin . g:launch_vim
+    " | xargs -I{} -L 1 nvr -c':edit {}'"
+     echomsg(l:cmdo)
+     call termopen(l:cmdo,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
 endfunction
@@ -105,7 +107,7 @@ endfunction
 
 function! ZettelFullFind(x,...)
     let g:zettel_start_buffer = bufnr('%')
-    new
+    " new
     if a:0 > 0
         call termopen('Zettel find -q' . shellescape(a:1) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
     else 
@@ -120,7 +122,8 @@ function! MyExitFunctionWithAppend(a,b,c)
  call MyExitFunction(a:a,a:b,a:c)
  edit
  call setpos(".",g:zettel_cursor_pos)
- execute "normal! i[" . g:zettel_input . "]\<Esc>"
+ execute "normal! a[" . g:zettel_input . "]\<Esc>"
+ let g:zettel_input = ""
  write
 endfunction 
 
@@ -132,10 +135,21 @@ function! MyExitFunction(a,b,c)
  execute 'bd! ' . g:zettel_buffer 
 endfunction 
 
-let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
+let g:launch_vim    = "|xargs PopNVR.fish"
+let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' " . g:launch_vim
+" let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
+
+function! ZettelBacklinks(origin)
+    "new
+    let l:cmd = "Zettel neighbourhood --backlinks " . shellescape(a:origin) . g:fzf_xargs_vim
+    echomsg(l:cmd)
+    call termopen(l:cmd , {'on_exit':'MyExitFunction'})
+    let g:zettel_buffer = bufnr('%')
+    call feedkeys("i")
+endfunction
 
 function! ZettelThread(origin)
-    new
+    " new
     call termopen("Zettel neighbourhood --thread " . a:origin . g:fzf_xargs_vim , {'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
@@ -149,6 +163,7 @@ endfunction
 
 function! ZettelLink(origin,...)
     let g:zettel_cursor_pos = getpos(".")
+    write
     new
 	if a:0 > 0 
         call termopen("Zettel link --origin " . a:origin . " --search " . a:1,{'on_exit':'MyExitFunction'})
@@ -165,6 +180,7 @@ command! -nargs=0 ZFill :!zettel auto-fill --target %:t
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
 command! -nargs=1 Zext call ZExtend(expand("%:t"),<q-args>)
+command! -nargs=0 ZTreeView new | :read !zettel neighbourhood --human --tree #:t 
 
 nmap <localleader>zr :call ZResolve()<CR>
 nmap <localleader>ze :call ZExtend(expand("%:t"),input('Note title> '))<CR>
@@ -176,6 +192,7 @@ nmap <localleader>zF :call ZettelFullFind('')<CR>
 nmap <localleader>zg :call ZettelFind(expand('%:t'),expand('<cword>'))<CR>
 nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>
 nmap <localleader>zt :call ZettelThread(expand('%:t'))<CR>
+nmap <localleader>zb :call ZettelBacklinks(expand('%:t'))<CR>
 nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
 nmap <localleader>zp :call PasteQuote()<CR>

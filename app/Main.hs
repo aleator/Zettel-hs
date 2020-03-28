@@ -96,6 +96,10 @@ argChooseFrom =
     (FromOriginTree
         <$> strOption (long "tree" <> help "Select origin tree of this zettel" 
                                      <> metavar "ZETTEL"))
+    <|>
+    (FromBackLinks
+        <$> strOption (long "backlinks" <> help "Select backlinks to zettel" 
+                                     <> metavar "ZETTEL"))
 
 
 cmdExport :: Parser Commands
@@ -313,7 +317,9 @@ main = do
     )
 
   home <- getHomeDir
-  let zettelkasten = fileSystemZK (home </> $(mkRelDir "zettel"))
+  let linkageDBFile     = home </> $(mkRelFile "zettel/.linkage.db")--TODO: Wrap this like the zettelkasten is wrapped
+  zettelkasten <- fileSystemZK (home </> $(mkRelDir "zettel")) 
+                    |> setAutoStoreLinkage linkageDBFile
   let indexDir     = home </> $(mkRelDir "zettel/.zettel_index")--TODO: Wrap this like the zettelkasten is wrapped
   let metaDB       = home </> $(mkRelFile "zettel/.meta_db")--TODO: Wrap this like the zettelkasten is wrapped
 
@@ -327,7 +333,11 @@ main = do
                         links <- getLinkStructure zettelkasten zettels
                         let getLabelFor (Link linkTarget desc ref) = do
                                 lbl <- findLabelsFor links linkTarget 
-                                        >>= (filter (/="") .> ordNub .> selectLabels)
+                                    >>= filter (/="") 
+                                        .> filter (/="Origin")
+                                        .> ordNub 
+                                        .> selectLabels
+                                            
                                 pure (Link linkTarget desc (Just lbl))
                         labeled <- traverse getLabelFor theLinks 
                         pure labeled
@@ -456,17 +466,49 @@ main = do
             asLink path = Link path Nothing Nothing
         in case area of
             FromNeighbourhood zettelName -> do
-                allZettels <- listZettels zettelkasten
-                linkStructure <- getLinkStructure zettelkasten allZettels
-                let neighbours = neighbourhoodAndLinks allZettels linkStructure
-                                        zettelName
-                let neighbourLinks = [Link x Nothing Nothing
-                                     | x <- HashSet.toList neighbours ]
-                mapM_ (printLink zettelkasten) neighbourLinks
+                conn <- createLinkageDB linkageDBFile
+                neighbours <- SQL.query conn
+                    "with source(title) as ( \
+                    \ values(?) \
+                    \), \
+                    \parents(title) as ( \
+                    \  select distinct fromZ from linkstructure, source  where \
+                    \     toZ = source.title \
+                    \), \
+                    \siblings(title) as ( \
+                    \  select distinct toZ from linkstructure where \
+                    \    fromZ in (select * from parents) \
+                    \), \
+                    \children(title) as ( \
+                    \  select distinct toZ from linkstructure,source where \
+                    \    fromZ = source.title \
+                    \     \
+                    \) \
+                    \select distinct title from children UNION \
+                    \select distinct title from siblings UNION \
+                    \select distinct title from parents "
+                    (SQL.Only zettelName)
+                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) neighbours
 
             FromOriginThread zettelName -> do
-                origins <- originChain zettelkasten zettelName
-                traverse_ (printLink zettelkasten) origins
+                conn <- createLinkageDB linkageDBFile
+                thread <- SQL.query conn 
+                    "with recursive cnt(x,n) AS ( \
+                    \    values(?,1) \
+                    \    union all \
+                    \    select linkstructure.toZ,cnt.n+1 from linkstructure, cnt \
+                    \    where  \
+                    \        linkstructure.fromZ = cnt.x \
+                    \        and  \
+                    \        linkStructure.ref = \"Origin\" \
+                    \        and cnt.n<2000 \
+                    \  ) \
+                    \  select distinct x from cnt order by n asc;"
+                    (SQL.Only zettelName)
+                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) thread
+
+                -- origins <- originChain zettelkasten zettelName
+                -- traverse_ (printLink zettelkasten) origins
 
             FromOriginTree zettelName -> do
                 allZettels <- listZettels zettelkasten
@@ -480,10 +522,12 @@ main = do
                                     originT
 
             FromBackLinks zettelName -> do
-                allZettels <- listZettels zettelkasten
-                linkStructure <- getLinkStructure zettelkasten allZettels
-                let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
-                traverse_ ( asLink .> printLink zettelkasten) backlinks
+                --allZettels <- listZettels zettelkasten
+                conn <- createLinkageDB linkageDBFile
+                backlinks  <- SQL.query conn "select fromZ from linkstructure where toZ = ?" (SQL.Only zettelName)
+                --linkStructure <- getLinkStructure zettelkasten allZettels
+                --let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
+                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) backlinks
 
             AllZettels -> do
                 allZettels <- listZettels zettelkasten
@@ -596,7 +640,8 @@ neighbourhoodAndLinks links ls@(LS thisLinksTo thisHasLinkFrom _) zettelName
 
 -- Find origin tree of zettel
 originTree :: LinkStructure -> Text -> (Tree Text)
-originTree linkStructure zettelName 
+originTree = originTree' mempty 
+originTree' visited linkStructure zettelName 
     = let
        backlinks = [ backlinker :: Text
                    | backlinker <- HashSet.toList 
@@ -605,8 +650,10 @@ originTree linkStructure zettelName
                          (mLookup
                              (backlinker,zettelName)
                              (linkLabel linkStructure))
+                   , not (backlinker `HashSet.member` visited)
                    ]
-      in Node zettelName (map (originTree linkStructure) backlinks)
+       visitedNow = visited <> HashSet.fromList backlinks 
+      in Node zettelName (map (originTree' visitedNow linkStructure) backlinks)
 
 
 -- Find the origin chain of a zettel
@@ -654,7 +701,34 @@ fillMissingLinks zettelkasten zettel =
             pure (fmap (addLinks lnks .> addReferences originRefs) zettel)
 
 
--- Store metadata
+-- Store metadata: TODO: Split this off
+
+setAutoStoreLinkage :: Path Abs File -> ZettelKasten -> IO ZettelKasten
+setAutoStoreLinkage pth zettelkasten = do
+    conn <- createLinkageDB pth
+    let saveZettelWithLinks nzettel = do
+          refreshLinks conn nzettel
+          saveZettel zettelkasten nzettel
+    pure (zettelkasten{saveZettel=saveZettelWithLinks})
+
+createLinkageDB :: Path Abs File -> IO SQL.Connection
+createLinkageDB dbPath = do
+   conn <- SQL.open (toFilePath dbPath)
+   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS linkstructure\
+                 \(id INTEGER PRIMARY KEY, fromZ TEXT, toZ TEXT, ref TEXT)"
+   pure conn 
+
+refreshLinks :: SQL.Connection -> Named Zettel -> IO ()
+refreshLinks conn zettel = SQL.withTransaction conn <| do
+    SQL.execute conn "DELETE FROM linkstructure \
+                     \WHERE \
+                     \fromZ = ?" (SQL.Only (name zettel))
+    forM_ (namedValue zettel |> links) <| \lnk -> 
+        SQL.execute conn "INSERT INTO linkstructure(fromZ,toZ,ref) VALUES (?,?,?)"
+                         (name zettel,linkTarget lnk, refNo lnk)
+    
+                            
+
 
 createElucidationDB :: Path Abs File -> IO SQL.Connection
 createElucidationDB dbPath = do
