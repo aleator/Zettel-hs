@@ -13,6 +13,7 @@ import           System.Process.Typed
 import           Parser -- TODO Make a Type module instead
 import           Operations
 import           Elucidations
+import           Visualization
 import           ZettelKasten
 import           Data.Tree
 import qualified Data.Text                     as T
@@ -332,8 +333,11 @@ main = do
                         zettels <- listZettels zettelkasten
                         links <- getLinkStructure zettelkasten zettels
                         let getLabelFor (Link linkTarget desc ref) = do
+                                title <- loadZettel zettelkasten linkTarget
+                                          >>= namedValue .> title .> pure
                                 lbl <- findLabelsFor links linkTarget 
-                                    >>= filter (/="") 
+                                    >>= (title:)
+                                        .> filter (/="") 
                                         .> filter (/="Origin")
                                         .> ordNub 
                                         .> selectLabels
@@ -515,8 +519,8 @@ main = do
                 linkStructure <- getLinkStructure zettelkasten allZettels
                 let originT = originTree linkStructure zettelName
                 case forWho of
-                    Human -> fmap toString originT |> drawTree |> 
-                                putStrLn 
+                    Human -> fmap toText originT |> drawUnicode 
+                                |> traverse_ putTextLn 
                     Computer -> traverse_ 
                                     (asLink .> printLink zettelkasten) 
                                     originT

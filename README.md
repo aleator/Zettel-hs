@@ -102,7 +102,7 @@ own personal system instead.
 
 # Vim integration
 
-There is a somewhat badly behaving [vim integration](zettel.vim). Add
+There is a somewhat badly behaving [nvim integration](zettel.vim). 
 `source <path where you put it>/zettel.vim` to your init.vim or vimrc to
 enable it. Here is a quick user quide:
 
@@ -117,7 +117,7 @@ enable it. Here is a quick user quide:
     
 ### Manipulation
 
-* `zl`    : Add *Links* to call zettel 
+* `zl`    : Add *Links* to zettel 
 * `zw`    : Add *WikiLinks* to zettel 
 * `zs`    : *Split visual selection* to a new zettel (see ZFill above)
 
@@ -138,6 +138,7 @@ enable it. Here is a quick user quide:
 
 * `zn`    : Show *neighbourhood* of the zettel
 * `zt`    : Show *origin chain* of the zettel
+* `zb`    : Show *backlinks* of the zettel
 
 You can also create new zettels by invoking find and then typing a title which
 produces no find results (or if you can't do that, type title and press <ctrl>-n).
@@ -158,6 +159,10 @@ You need to install the excellent [`fzf`](https://github.com/junegunn/fzf) and
 [`rg`](https://github.com/BurntSushi/ripgrep) programs first.  Also, the search
 command can use [`tantivy-cli`](https://github.com/tantivy-search/tantivy-cli)
 for full text searches.
+
+Additionally install [`neovim-remote`](https://github.com/mhinz/neovim-remote) and
+copy `PopNVR.fish` to your path. If you happen to use some other shell, then additionally,
+port `PopNVR.fish` to your shell. (I really need to incorporate that into the program as whole...)
 
 Then install
 [stack](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then

@@ -20,6 +20,7 @@ library
      , Parser
      , Operations
      , Elucidations
+     , Visualization
   hs-source-dirs:
       src
   extensions: OverloadedStrings
@@ -30,6 +31,7 @@ library
     , typed-process
     , bytestring
     , uuid
+    , containers
     , random
     , text
     , directory
