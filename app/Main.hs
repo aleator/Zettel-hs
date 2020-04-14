@@ -5,6 +5,7 @@
 {-#language ScopedTypeVariables#-}
 {-#language TemplateHaskell#-}
 {-#language DeriveAnyClass#-}
+{-#language DerivingVia#-}
 {-#language DeriveGeneric#-}
 {-#language BlockArguments#-}
 module Main where
@@ -73,6 +74,8 @@ data ChooseFrom = AllZettels
                 | FromOriginTree    Text 
                 | FromOutbound      Text 
                 | FromBackLinks     Text 
+                | FromRecent        Minutes
+                | FromTemporal      Natural Text 
                 deriving (Eq,Show)
 
 data ResolveMissing = CreateNewByRefID | ReturnError
@@ -109,6 +112,17 @@ argChooseFrom =
     (FromOutbound
         <$> strOption (long "outbound" <> help "Select backlinks to zettel" 
                                      <> metavar "ZETTEL"))
+    <|>
+    (FromTemporal
+        <$> option auto (long "count" <> help "Number of zettels select" 
+                                     <> metavar "NATURAL")
+        <*> strOption (long "temporal" <> help "Select temporally related zettels" 
+                                     <> metavar "ZETTEL")
+                                     )
+    <|>
+    (FromRecent
+        <$> option auto (long "recent" <> help "Select recently edited zettels" 
+                                        <> metavar "MINUTES"))
 
 cmdExport :: Parser Commands
 cmdExport =
@@ -551,6 +565,15 @@ main = do
                 --let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
                 traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) backlinks
 
+            FromRecent min -> do
+                c <- createHistoryDB metaDB
+                recentZettels c min >>=
+                    traverse_ (asLink .> printLink zettelkasten) 
+            FromTemporal number zettelName -> do
+                c <- createHistoryDB metaDB
+                temporalNeighbourhood c number zettelName >>=
+                    traverse_ (asLink .> printLink zettelkasten) 
+
             AllZettels -> do
                 allZettels <- listZettels zettelkasten
                 mapM_ (printLink zettelkasten) allZettels
@@ -755,7 +778,7 @@ recordOpenZettel conn zettelName = do
     SQL.execute conn
                 "INSERT OR IGNORE INTO TemporalRelation \
                 \SELECT ?, zettel, 1 FROM AccessLog \ 
-                \WHERE date < ?"
+                \WHERE date > ?"
                 (zettelName,addUTCTime (15*60) now)
     let timeUpdate time = 
           SQL.execute conn
@@ -771,6 +794,30 @@ recordOpenZettel conn zettelName = do
     addUTCTime (negate (1*60))  now |> timeUpdate 
     addUTCTime (negate 30)      now |> timeUpdate 
 
+newtype Minutes = Min Natural 
+    deriving Num via Natural
+    deriving Show via Natural
+    deriving Read via Natural
+    deriving Ord via Natural
+    deriving Eq via Natural
+
+recentZettels :: SQL.Connection -> Minutes -> IO [Text]
+recentZettels conn (Min n) = do
+    now <- getCurrentTime
+    SQL.query conn
+              "SELECT DISTINCT zettel from AccessLog WHERE date > ? ORDER BY date ASC"
+              (SQL.Only (addUTCTime (- (fromIntegral n * 60)) now))
+           >>= map SQL.fromOnly .> pure
+
+temporalNeighbourhood :: SQL.Connection -> Natural -> Text -> IO [Text]
+temporalNeighbourhood conn number zettelName = do
+    SQL.queryNamed conn
+              "SELECT DISTINCT fromZ, count from TemporalRelation WHERE toZ = :zettelName \ 
+              \UNION \
+              \SELECT DISTINCT toZ, count from TemporalRelation WHERE fromZ = :zettelName \ 
+              \ORDER BY count DESC LIMIT :num"
+              [":zettelName" SQL.:= zettelName, ":num" SQL.:= (fromIntegral number :: Int) ]
+           >>= map (fst :: (Text,Int) -> Text) .> filter (/= zettelName) .> pure
 
 
 createLinkageDB :: Path Abs File -> IO SQL.Connection

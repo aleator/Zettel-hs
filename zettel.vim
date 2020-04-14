@@ -78,16 +78,34 @@ endfunction
 
 function! ZettelOutbound(origin)
     let g:zettel_start_buffer = bufnr('%')
-    " new
+     new
     call termopen('Zettel neighbourhood --outbound ' . a:origin . " | fzf -d '-' --multi --with-nth 6.. --preview 'zettel body --origin {}' " . g:launch_vim ,{'on_exit':'MyExitFunction'})
+    let g:zettel_buffer = bufnr('%')
+    call feedkeys('i')
+endfunction
+
+function! ZettelTemporal(origin)
+    let g:zettel_start_buffer = bufnr('%')
+     new
+    let l:cmd = 'Zettel neighbourhood --count 10 --temporal ' . a:origin . g:fzf_xargs_vim
+    echomsg(l:cmd)
+    call termopen(l:cmd ,{'on_exit':'MyExitFunction'})
+    let g:zettel_buffer = bufnr('%')
+    call feedkeys('i')
+endfunction
+
+function! ZettelRecent()
+    let g:zettel_start_buffer = bufnr('%')
+     new
+    call termopen('Zettel neighbourhood --recent 30 ' . g:fzf_xargs_vim . g:launch_vim ,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
 endfunction
 
 function! ZettelNeighbourhood(origin)
     let g:zettel_start_buffer = bufnr('%')
-    " new
-    call termopen('Zettel neighbourhood --neighbourhood ' . a:origin . " | fzf -d '-' --multi --with-nth 6.. --preview 'zettel body --origin {}' " . g:launch_vim ,{'on_exit':'MyExitFunction'})
+     new
+    call termopen('Zettel neighbourhood --neighbourhood ' . a:origin . g:fzf_xargs_vim ,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
 endfunction
@@ -114,7 +132,7 @@ endfunction
 
 function! ZettelFullFind(x,...)
     let g:zettel_start_buffer = bufnr('%')
-    " new
+     new
     if a:0 > 0
         call termopen('Zettel find -q' . shellescape(a:1) . g:fzf_xargs_vim,{'on_exit':'MyExitFunction'})
     else 
@@ -144,7 +162,7 @@ function! MyExitFunction(a,exit_code,c)
  endif
 endfunction 
 
-let g:launch_vim    = "|xargs PopNVR.fish"
+let g:launch_vim    = "|xargs nvr -o"
 let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' " . g:launch_vim
 " let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
 
@@ -158,7 +176,7 @@ function! ZettelBacklinks(origin)
 endfunction
 
 function! ZettelThread(origin)
-    " new
+     new
     call termopen("Zettel neighbourhood --thread " . a:origin . g:fzf_xargs_vim , {'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
@@ -207,13 +225,14 @@ vmap <localleader>zF :<c-u>call ZettelFindVisualSelection()<CR>
 nmap <localleader>zF :call ZettelFullFind('')<CR>
 nmap <localleader>zg :call ZettelFind(expand('%:t'),expand('<cword>'))<CR>
 nmap <localleader>zn :call ZettelNeighbourhood(expand('%:t'))<CR>
+nmap <localleader>zR :call ZettelRecent()<CR>
+nmap <localleader>zT :call ZettelTemporal(expand('%:t'))<CR>
 nmap <localleader>zo :call ZettelOutbound(expand('%:t'))<CR>
 nmap <localleader>zt :call ZettelThread(expand('%:t'))<CR>
 nmap <localleader>zb :call ZettelBacklinks(expand('%:t'))<CR>
 nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
 nmap <localleader>zp :call PasteQuote()<CR>
-
 augroup zettel
 autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
