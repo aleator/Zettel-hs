@@ -55,7 +55,10 @@ data Commands
   | AddReferences Text (Target BibItem)
   | Elucidate
   | FillLabels Text
+  | Touch TouchType Text
   deriving (Eq, Show)
+
+data TouchType = TouchOpen deriving (Eq,Show)
 
 data AutoMaybe a = Auto | No | Use a  deriving (Eq,Show,Read,Generic)
 
@@ -68,6 +71,7 @@ data ChooseFrom = AllZettels
                 | FromNeighbourhood Text 
                 | FromOriginThread  Text 
                 | FromOriginTree    Text 
+                | FromOutbound      Text 
                 | FromBackLinks     Text 
                 deriving (Eq,Show)
 
@@ -101,7 +105,10 @@ argChooseFrom =
     (FromBackLinks
         <$> strOption (long "backlinks" <> help "Select backlinks to zettel" 
                                      <> metavar "ZETTEL"))
-
+    <|>
+    (FromOutbound
+        <$> strOption (long "outbound" <> help "Select backlinks to zettel" 
+                                     <> metavar "ZETTEL"))
 
 cmdExport :: Parser Commands
 cmdExport =
@@ -281,6 +288,14 @@ cmdFillLabels =
                   "Zettel to try to autofill labels for"
                 )
 
+cmdTouch :: Parser Commands
+cmdTouch =
+  Touch
+    <$> flag' TouchOpen (long "open" <> help "Call when opening a zettel")
+    <*> strOption (long "target" <> metavar "ZETTEL" <> help
+                  "Zettel to try to autofill labels for"
+                )
+
 --TODO, BUG: IF rg does not find anything, fzf is launched empty and error is printed
 --
 
@@ -300,6 +315,7 @@ cmdCommands = subparser
   <> cmd cmdAddReferences "addreferences" "Add references to a Zettel"
 --  <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
   <> cmd cmdFillLabels "auto-fill" "Fill missing wikilinks and references from origin"
+  <> cmd cmdTouch "touch" "Record opening a zettel (for logging purposes)"
   )
  where
   cmd theCmd name desc =
@@ -364,7 +380,6 @@ main = do
             labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
             saveZettel zettelkasten (addLinks labeledLinks <$> newOriginal)
             printLabels labeledLinks
-
       pass
 
     Find mOrigin howToFind -> do
@@ -525,8 +540,11 @@ main = do
                                     (asLink .> printLink zettelkasten) 
                                     originT
 
+            FromOutbound zettelName -> do
+                zettel <- readZettelFromNameOrFilename zettelkasten zettelName
+                namedValue zettel |> links |> traverse_ (printLink zettelkasten) 
+
             FromBackLinks zettelName -> do
-                --allZettels <- listZettels zettelkasten
                 conn <- createLinkageDB linkageDBFile
                 backlinks  <- SQL.query conn "select fromZ from linkstructure where toZ = ?" (SQL.Only zettelName)
                 --linkStructure <- getLinkStructure zettelkasten allZettels
@@ -560,6 +578,10 @@ main = do
         -- Assume that there is only a single origin to keep this simple.
         zettel <- loadZettel zettelkasten zettelName
         fillMissingLinks zettelkasten zettel >>= saveZettel zettelkasten
+
+    Touch TouchOpen zettelName -> do
+        conn <- createHistoryDB metaDB
+        recordOpenZettel conn zettelName
 
 
 readZettelFromNameOrFilename zettelkasten zettelNameOrFilename =
@@ -715,6 +737,42 @@ setAutoStoreLinkage pth zettelkasten = do
           saveZettel zettelkasten nzettel
     pure (zettelkasten{saveZettel=saveZettelWithLinks})
 
+createHistoryDB :: Path Abs File -> IO SQL.Connection
+createHistoryDB dbPath = do
+   conn <- SQL.open (toFilePath dbPath)
+   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS AccessLog \
+                     \(id INTEGER PRIMARY KEY, event TEXT, zettel TEXT, date TEXT)"
+   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS TemporalRelation \
+                     \(fromZ TEXT, toZ TEXT, count INTEGER, PRIMARY KEY (fromZ,toZ))"
+   pure conn 
+
+recordOpenZettel :: SQL.Connection -> Text -> IO ()
+recordOpenZettel conn zettelName = do
+    now <- getCurrentTime
+    SQL.execute conn
+                "INSERT INTO AccessLog(event,zettel,date) VALUES (?,?,?)"
+                ("OPEN" :: Text, zettelName, now)
+    SQL.execute conn
+                "INSERT OR IGNORE INTO TemporalRelation \
+                \SELECT ?, zettel, 1 FROM AccessLog \ 
+                \WHERE date < ?"
+                (zettelName,addUTCTime (15*60) now)
+    let timeUpdate time = 
+          SQL.execute conn
+                    "UPDATE TemporalRelation \
+                    \SET count = 1 + count \
+                    \ WHERE fromZ = ? \
+                    \ AND toZ in (SELECT zettel FROM AccessLog \
+                    \              WHERE date > ?)" 
+                    (zettelName, time)
+    -- Update counts so that weights near the time are higher.
+    addUTCTime (negate (15*60)) now |> timeUpdate
+    addUTCTime (negate (5*60))  now |> timeUpdate 
+    addUTCTime (negate (1*60))  now |> timeUpdate 
+    addUTCTime (negate 30)      now |> timeUpdate 
+
+
+
 createLinkageDB :: Path Abs File -> IO SQL.Connection
 createLinkageDB dbPath = do
    conn <- SQL.open (toFilePath dbPath)
@@ -731,9 +789,6 @@ refreshLinks conn zettel = SQL.withTransaction conn <| do
         SQL.execute conn "INSERT INTO linkstructure(fromZ,toZ,ref) VALUES (?,?,?)"
                          (name zettel,linkTarget lnk, refNo lnk)
     
-                            
-
-
 createElucidationDB :: Path Abs File -> IO SQL.Connection
 createElucidationDB dbPath = do
    conn <- SQL.open (toFilePath dbPath)

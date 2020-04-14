@@ -29,8 +29,8 @@ linkTo named = Link (name named) Nothing Nothing
 maulToFilename title = 
    let  noSpace x 
             | isSpace x = '-'
-            | x == '/'  = '#'
-            | not (isAlphaNum x || '-' == x) = '#'
+            | x == '/'  = '_'
+            | not (isAlphaNum x || '-' == x) = '_'
             | otherwise = toLower x
   in case parseRelFile (Prelude.toString (T.map noSpace title)) of 
                    Right aPath 

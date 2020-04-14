@@ -18,9 +18,18 @@ drawUnicode (Node v nodes) = v:loop nodes
                     (first:rest) -> " ├─ "<>first
                                         : map (" │ "<> ) rest++loop xs
 
+testTreeLinear :: Tree Text
+testTreeLinear = Node "A" 
+                   [Node "B" [Node "C" [Node "D" []]]] 
+testBranch :: Tree Text
+testBranch = Node "Topic" 
+                   [Node "A" []
+                   ,Node "B" []
+                   ,Node "C" []
+                   ,Node "D" []]
 
 testTree :: Tree Text
-testTree = Node "foo" 
+testTree = Node "A" 
             [Node "Bar" []
             ,Node "Baz" [
                  Node "Guz1" []
