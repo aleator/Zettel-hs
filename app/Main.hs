@@ -381,8 +381,6 @@ main = do
                         labeled <- traverse getLabelFor theLinks 
                         pure labeled
 
-      let printLabels labeledLinks = mapM_ putTextLn ([ref | Link _ _ ref' <- labeledLinks, ref <- maybeToList ref'])
-
       case searchResults of
         Links theLinks -> case maybeReference of
                            No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
@@ -396,7 +394,6 @@ main = do
                                                                 labels 
                                              <$> addLinks labeledLinks 
                                              <$> zettel)
-                                        printLabels labeledLinks
                                         
         CreateNew title links  -> do
             original <- loadZettel zettelkasten (toText origin)
