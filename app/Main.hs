@@ -11,11 +11,15 @@
 module Main where
 import           Options.Applicative
 import           System.Process.Typed
-import           Parser -- TODO Make a Type module instead
+
+import           Zettel -- TODO Make a Type module instead
 import           Operations
 import           Elucidations
 import           Visualization
 import           ZettelKasten
+import           Meta.History
+import           Meta.Linkage
+
 import           Data.Tree
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.IO             as LT
@@ -500,48 +504,13 @@ main = do
         in case area of
             FromNeighbourhood zettelName -> do
                 conn <- createLinkageDB linkageDBFile
-                neighbours <- SQL.query conn
-                    "with source(title) as ( \
-                    \ values(?) \
-                    \), \
-                    \parents(title) as ( \
-                    \  select distinct fromZ from linkstructure, source  where \
-                    \     toZ = source.title \
-                    \), \
-                    \siblings(title) as ( \
-                    \  select distinct toZ from linkstructure where \
-                    \    fromZ in (select * from parents) \
-                    \), \
-                    \children(title) as ( \
-                    \  select distinct toZ from linkstructure,source where \
-                    \    fromZ = source.title \
-                    \     \
-                    \) \
-                    \select distinct title from children UNION \
-                    \select distinct title from siblings UNION \
-                    \select distinct title from parents "
-                    (SQL.Only zettelName)
-                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) neighbours
+                neighbours <- findNeighbours conn zettelName
+                traverse_ ( asLink .> printLink zettelkasten) neighbours
 
             FromOriginThread zettelName -> do
                 conn <- createLinkageDB linkageDBFile
-                thread <- SQL.query conn 
-                    "with recursive cnt(x,n) AS ( \
-                    \    values(?,1) \
-                    \    union all \
-                    \    select linkstructure.toZ,cnt.n+1 from linkstructure, cnt \
-                    \    where  \
-                    \        linkstructure.fromZ = cnt.x \
-                    \        and  \
-                    \        linkStructure.ref = \"Origin\" \
-                    \        and cnt.n<2000 \
-                    \  ) \
-                    \  select distinct x from cnt order by n asc;"
-                    (SQL.Only zettelName)
-                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) thread
-
-                -- origins <- originChain zettelkasten zettelName
-                -- traverse_ (printLink zettelkasten) origins
+                findOriginThread conn zettelName >>= 
+                    traverse_ (asLink .> printLink zettelkasten) 
 
             FromOriginTree zettelName -> do
                 allZettels <- listZettels zettelkasten
@@ -560,15 +529,14 @@ main = do
 
             FromBackLinks zettelName -> do
                 conn <- createLinkageDB linkageDBFile
-                backlinks  <- SQL.query conn "select fromZ from linkstructure where toZ = ?" (SQL.Only zettelName)
-                --linkStructure <- getLinkStructure zettelkasten allZettels
-                --let backlinks = mLookup zettelName (hasLinkFrom linkStructure)
-                traverse_ ( SQL.fromOnly .> asLink .> printLink zettelkasten) backlinks
+                findBacklinks conn zettelName >>=
+                    traverse_ (asLink .> printLink zettelkasten)
 
             FromRecent min -> do
                 c <- createHistoryDB metaDB
                 recentZettels c min >>=
                     traverse_ (asLink .> printLink zettelkasten) 
+
             FromTemporal number zettelName -> do
                 c <- createHistoryDB metaDB
                 temporalNeighbourhood c number zettelName >>=
@@ -760,81 +728,6 @@ setAutoStoreLinkage pth zettelkasten = do
           saveZettel zettelkasten nzettel
     pure (zettelkasten{saveZettel=saveZettelWithLinks})
 
-createHistoryDB :: Path Abs File -> IO SQL.Connection
-createHistoryDB dbPath = do
-   conn <- SQL.open (toFilePath dbPath)
-   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS AccessLog \
-                     \(id INTEGER PRIMARY KEY, event TEXT, zettel TEXT, date TEXT)"
-   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS TemporalRelation \
-                     \(fromZ TEXT, toZ TEXT, count INTEGER, PRIMARY KEY (fromZ,toZ))"
-   pure conn 
-
-recordOpenZettel :: SQL.Connection -> Text -> IO ()
-recordOpenZettel conn zettelName = do
-    now <- getCurrentTime
-    SQL.execute conn
-                "INSERT INTO AccessLog(event,zettel,date) VALUES (?,?,?)"
-                ("OPEN" :: Text, zettelName, now)
-    SQL.execute conn
-                "INSERT OR IGNORE INTO TemporalRelation \
-                \SELECT ?, zettel, 1 FROM AccessLog \ 
-                \WHERE date > ?"
-                (zettelName,addUTCTime (15*60) now)
-    let timeUpdate time = 
-          SQL.execute conn
-                    "UPDATE TemporalRelation \
-                    \SET count = 1 + count \
-                    \ WHERE fromZ = ? \
-                    \ AND toZ in (SELECT zettel FROM AccessLog \
-                    \              WHERE date > ?)" 
-                    (zettelName, time)
-    -- Update counts so that weights near the time are higher.
-    addUTCTime (negate (15*60)) now |> timeUpdate
-    addUTCTime (negate (5*60))  now |> timeUpdate 
-    addUTCTime (negate (1*60))  now |> timeUpdate 
-    addUTCTime (negate 30)      now |> timeUpdate 
-
-newtype Minutes = Min Natural 
-    deriving Num via Natural
-    deriving Show via Natural
-    deriving Read via Natural
-    deriving Ord via Natural
-    deriving Eq via Natural
-
-recentZettels :: SQL.Connection -> Minutes -> IO [Text]
-recentZettels conn (Min n) = do
-    now <- getCurrentTime
-    SQL.query conn
-              "SELECT DISTINCT zettel from AccessLog WHERE date > ? ORDER BY date ASC"
-              (SQL.Only (addUTCTime (- (fromIntegral n * 60)) now))
-           >>= map SQL.fromOnly .> pure
-
-temporalNeighbourhood :: SQL.Connection -> Natural -> Text -> IO [Text]
-temporalNeighbourhood conn number zettelName = do
-    SQL.queryNamed conn
-              "SELECT DISTINCT fromZ, count from TemporalRelation WHERE toZ = :zettelName \ 
-              \UNION \
-              \SELECT DISTINCT toZ, count from TemporalRelation WHERE fromZ = :zettelName \ 
-              \ORDER BY count DESC LIMIT :num"
-              [":zettelName" SQL.:= zettelName, ":num" SQL.:= (fromIntegral number :: Int) ]
-           >>= map (fst :: (Text,Int) -> Text) .> filter (/= zettelName) .> pure
-
-
-createLinkageDB :: Path Abs File -> IO SQL.Connection
-createLinkageDB dbPath = do
-   conn <- SQL.open (toFilePath dbPath)
-   SQL.execute_ conn "CREATE TABLE IF NOT EXISTS linkstructure\
-                 \(id INTEGER PRIMARY KEY, fromZ TEXT, toZ TEXT, ref TEXT)"
-   pure conn 
-
-refreshLinks :: SQL.Connection -> Named Zettel -> IO ()
-refreshLinks conn zettel = SQL.withTransaction conn <| do
-    SQL.execute conn "DELETE FROM linkstructure \
-                     \WHERE \
-                     \fromZ = ?" (SQL.Only (name zettel))
-    forM_ (namedValue zettel |> links) <| \lnk -> 
-        SQL.execute conn "INSERT INTO linkstructure(fromZ,toZ,ref) VALUES (?,?,?)"
-                         (name zettel,linkTarget lnk, refNo lnk)
     
 createElucidationDB :: Path Abs File -> IO SQL.Connection
 createElucidationDB dbPath = do

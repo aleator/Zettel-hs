@@ -1,0 +1,36 @@
+{
+  "segments": [],
+  "schema": [
+    {
+      "name": "body",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "en_stem"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "en_stem"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "identifier",
+      "type": "text",
+      "options": {
+        "indexing": null,
+        "stored": true
+      }
+    }
+  ],
+  "opstamp": 0
+}

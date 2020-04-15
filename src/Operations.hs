@@ -4,7 +4,8 @@
 {-#language DeriveAnyClass#-}
 module Operations where
 
-import Parser -- TODO Extract type
+import Zettel
+import Parser
 import Data.UUID
 import Data.UUID.V4
 import Data.Char
@@ -21,8 +22,6 @@ import Path
 import System.Random
 
 
-data Named a = Named {name :: Text, namedValue :: a}
- deriving (Show,Functor,Generic,Aeson.ToJSON,Aeson.FromJSON)
 
 linkTo named = Link (name named) Nothing Nothing
 

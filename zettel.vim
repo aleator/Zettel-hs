@@ -23,7 +23,7 @@ function! ZettelSplit(current)
                 \ . " --origin " . shellescape(a:current) 
                 \ . " --ref-id " . shellescape(l:title) 
                 \ . " --initial "
-    echomsg(l:cmd)
+    " echomsg(l:cmd)
     let l:result = system(l:cmd, @z)
     edit
     call ZPopSplit(l:result)
@@ -53,10 +53,10 @@ function! ZFindWikiLink(origin, ...)
  let g:zettel_start_buffer = bufnr('%')
  new
 	if a:0 > 0 
-        echomsg("Zettel link --origin " . a:origin . " --search " . a:1 . " --reference " . @z)
+        " echomsg("Zettel link --origin " . a:origin . " --search " . a:1 . " --reference " . @z)
         call termopen("Zettel link --origin " . a:origin . " --search " . a:1 . " --reference " . @z ,{'on_exit':'MyExitFunction'})
     else
-        echomsg("Zettel link --origin " . a:origin . " --reference " . shellescape(@z))
+        " echomsg("Zettel link --origin " . a:origin . " --reference " . shellescape(@z))
         call termopen("Zettel link --origin " . a:origin . " --reference " . shellescape(@z), {'on_exit':'MyExitFunction'})
     end
  let g:zettel_buffer = bufnr('%')
@@ -64,7 +64,7 @@ function! ZFindWikiLink(origin, ...)
 endfunction
 
 function! ZPopSplit(name)
-    execute ":sp " . fnameescape(trim(a:name))
+    execute ":e " . fnameescape(trim(a:name))
 endfunction
 
 function! ZResolve()
@@ -88,7 +88,7 @@ function! ZettelTemporal(origin)
     let g:zettel_start_buffer = bufnr('%')
      new
     let l:cmd = 'Zettel neighbourhood --count 10 --temporal ' . a:origin . g:fzf_xargs_vim
-    echomsg(l:cmd)
+    " echomsg(l:cmd)
     call termopen(l:cmd ,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
@@ -112,9 +112,9 @@ endfunction
 
 function! ZettelFind(origin, kw)
     let g:zettel_start_buffer = bufnr('%')
-    "new
+    new
     let l:cmdo = "Zettel find --origin " . shellescape(a:origin) . g:launch_vim
-     echomsg(l:cmdo)
+     " echomsg(l:cmdo)
      call termopen(l:cmdo,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
@@ -153,11 +153,14 @@ function! MyExitFunctionWithAppend(a,exit_code,c)
 endfunction 
 
 function! MyExitFunction(a,exit_code,c)   
- echomsg('zb' . g:zettel_buffer . "EC" . a:exit_code)
+ " echomsg('zb' . g:zettel_buffer . "EC" . a:exit_code)
  if a:exit_code == 0
   let currwin=winnr()
   windo edit
   execute currwin . 'wincmd w'
+  if bufnr('%') == g:zettel_buffer 
+      execute 'bp'
+  endif
   execute 'bd! ' . g:zettel_buffer 
  endif
 endfunction 
@@ -167,9 +170,9 @@ let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel bod
 " let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
 
 function! ZettelBacklinks(origin)
-    "new
+    new
     let l:cmd = "Zettel neighbourhood --backlinks " . shellescape(a:origin) . g:fzf_xargs_vim
-    echomsg(l:cmd)
+    " echomsg(l:cmd)
     call termopen(l:cmd , {'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
@@ -196,7 +199,7 @@ function! ZettelLink(origin,...)
         call termopen("Zettel link --origin " . a:origin . " --search " . a:1,{'on_exit':'MyExitFunction'})
     else
         let l:cmd = ("Zettel link --ask --origin " . shellescape(a:origin) . ' | xargs -I {} nvr -c"call AddZInput(''{}'')"')
-        echomsg(l:cmd)
+        " echomsg(l:cmd)
         call termopen(l:cmd,{'on_exit':'MyExitFunctionWithAppend'})
     end
     let g:zettel_buffer = bufnr('%')
@@ -233,7 +236,9 @@ nmap <localleader>zb :call ZettelBacklinks(expand('%:t'))<CR>
 nmap <localleader>zl :call ZettelLink(expand("%:t"))<CR>
 nmap <localleader>zw :call ZFindWikiLink(expand("%:t"))<CR>
 nmap <localleader>zp :call PasteQuote()<CR>
+
 augroup zettel
+autocmd!
 autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
 autocmd BufRead */zettel/* highlight ZInlineCode guifg=green

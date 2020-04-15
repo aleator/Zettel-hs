@@ -21,6 +21,9 @@ library
      , Operations
      , Elucidations
      , Visualization
+     , Meta.History
+     , Meta.Linkage
+     , Zettel
   hs-source-dirs:
       src
   extensions: OverloadedStrings
@@ -42,6 +45,7 @@ library
     , path-io
     , path
     , cryptohash-sha256
+    , sqlite-simple
   default-language: Haskell2010
 
 executable Zettel
