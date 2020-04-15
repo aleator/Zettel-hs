@@ -67,7 +67,7 @@ fzf inputPipe
       fzfOpts = ["--multi"
                 ,"-d","-","--with-nth","6.."
                 ,"--print-query","--expect=ctrl-n"
-                , "--preview", "zettel body --origin {}"]
+                , "--preview", "Zettel body --origin {}"]
    in proc "fzf" fzfOpts |> setStdin inputPipe -- (getStdout p |> useHandleClose)
 
 findLabelsFor ::  LinkStructure ->  Text -> IO [Text]
