@@ -127,4 +127,11 @@ getPotentialLabels z = case runTheParser (name z |> Prelude.toString)
                                          labelSoup of
                         Left err -> []
                         Right v -> rights v
+
+newtype Placeholder = Placeholder Text
+replacePlaceholder :: Placeholder -> Text -> Zettel -> Zettel
+replacePlaceholder (Placeholder placeholder) text zettel
+    = zettel{ body = body zettel |> f }
+    where
+     f bodyText = T.replace placeholder text bodyText
     

@@ -56,6 +56,9 @@ pprZettel zettel =
 pprBib :: BibItem -> Text
 pprBib (BibItem ref txt) = "["<>ref<>"]: "<>T.strip txt
 
+pprLabel :: Text -> Text 
+pprLabel text = "["<>text<>"]"
+
 separatorLine :: IsString s => s
 separatorLine =
   "--------------------------------------------------------------------------------"

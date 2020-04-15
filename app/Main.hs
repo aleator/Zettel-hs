@@ -48,7 +48,7 @@ import qualified Data.Aeson                    as Aeson
 
 
 data Commands
-  = AddLinks FilePath (AutoMaybe Text) (Maybe Text)
+  = AddLinks FilePath (AutoMaybe Text Text) (Maybe Text)
   | Find (Maybe Text) HowToFind
   | Create Text (Maybe Text) (Maybe Text) CreateLinks InitialContent
   | ResolveReference ResolveMissing Text Text
@@ -65,7 +65,7 @@ data Commands
 
 data TouchType = TouchOpen deriving (Eq,Show)
 
-data AutoMaybe a = Auto | No | Use a  deriving (Eq,Show,Read,Generic)
+data AutoMaybe opts a = Auto opts | No | Use a deriving (Eq,Show,Read,Generic)
 
 data ForWho = Human | Computer deriving (Show,Eq)
 
@@ -245,7 +245,8 @@ cmdAddLinks =
   AddLinks
     <$> strOption
           (long "origin" <> help "Zettel to add links to" <> metavar "ZETTEL")
-    <*> (    (flag' Auto (long "ask"<>help "Ask for labels"))
+    <*> (    (flag' Auto (long "ask"<>help "Ask for labels")
+                <*> strOption (long "placeholder"<>help "Put references at placeholder text"))
          <|> (Use <$> strOption (long "reference" <> short 'r' <> metavar "REFERENCE"))
          <|> pure No)
     <*> optional
@@ -386,9 +387,15 @@ main = do
         Links theLinks -> case maybeReference of
                            No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
                            Use ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
-                           Auto    -> do
+                           Auto placeholder   -> do
                                         labeledLinks <- askForLabels theLinks 
-                                        saveZettel zettelkasten (addLinks labeledLinks <$> zettel)
+                                        let labels = T.intercalate " ,"
+                                                     [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+                                        saveZettel zettelkasten 
+                                            (replacePlaceholder (Placeholder placeholder)
+                                                                labels 
+                                             <$> addLinks labeledLinks 
+                                             <$> zettel)
                                         printLabels labeledLinks
                                         
         CreateNew title links  -> do

@@ -191,16 +191,14 @@ function! AddZInput(x)
     let g:zettel_input=a:x
 endfunction
 
-function! ZettelLink(origin,...)
+function! ZettelLink(origin)
     let g:zettel_cursor_pos = getpos(".")
+    execute "normal! i[PLACEHOLDER]"
     write
     new
-	if a:0 > 0 
-        call termopen("Zettel link --origin " . a:origin . " --search " . a:1,{'on_exit':'MyExitFunction'})
-    else
-        let l:cmd = ("Zettel link --ask --origin " . shellescape(a:origin) . ' | xargs -I {} nvr -c"call AddZInput(''{}'')"')
-        " echomsg(l:cmd)
-        call termopen(l:cmd,{'on_exit':'MyExitFunctionWithAppend'})
+    let l:cmd = ("Zettel link --ask --placeholder '[PLACEHOLDER]' --origin " . shellescape(a:origin) . ' | xargs -I {} nvr -c"call AddZInput(''{}'')"')
+    " echomsg(l:cmd)
+    call termopen(l:cmd,{'on_exit':'MyExitFunction'})
     end
     let g:zettel_buffer = bufnr('%')
     call feedkeys("i")
