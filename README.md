@@ -33,6 +33,7 @@ Available commands:
   references               Extract references from a Zettel
   addreferences            Add references to a Zettel
   auto-fill                Fill missing wikilinks and references from origin
+  touch                    Record opening a zettel (for logging purposes)
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)
@@ -114,31 +115,48 @@ enable it. Here is a quick user quide:
 * `:Zf`    : Do *full text search* on arqument. 
 
 ## Mappings (prefix with localleader)
+
+All the mappings need to be prefixed with the 'localleader'. If you don't
+know what that is, put `let maplocalleader='g'` in your vim config. Then,
+prefix each of the below commands with 'g' (or the letter you chose).
+For example, to add links, you would type `gzl`.
     
 ### Manipulation
 
-* `zl`    : Add *Links* to zettel 
-* `zw`    : Add *WikiLinks* to zettel 
+* `zl`    : Add *Links* to zettel. This will put a [wikilink] at cursor position.
+* `zw`    : Add *WikiLinks* to zettel (put cursor inside a [wikilink] before using)
 * `zs`    : *Split visual selection* to a new zettel (see ZFill above)
 
 ### Creation & Navigation
 
 * `zr`    : *Navigate to wikilink*. Creates the link if it doesn't
-        exist
+            exist (put cursor inside a [wikilink] before using)
 
-### Navigation (& creation)
+### Finding (& creation)
 
 * `zf`    : *Find* a zettel (type a new title, or press <ctrl-n> to 
         create a new zettel)
-* `zg`    : *Fuzzy find*, but limit to word under cursor (TODO: Do full
-        text find for this!)
 * `zf`    : *Fuzzy find* zettel by title
-
+* `zFF`   : *Full Text Find*, word under cursor (needs tantivy)
+* `zF`    : *Full Text Find*, prompt for word or use current visual selection (needs tantivy)
+            
 ### Network local discovery 
 
 * `zn`    : Show *neighbourhood* of the zettel
 * `zt`    : Show *origin chain* of the zettel
+* `zo`    : Show *outbound links* of the zettel
 * `zb`    : Show *backlinks* of the zettel
+
+### Temporal discovery
+
+* `zR`    : Show recently edited zettels
+* `zT`    : Show zettels that are often opened when this zettel is opened  
+
+
+### References et.al.
+
+* `zp`    : Paste stuff from clipboard as a quote (Currently works only on OS X
+            and if you have pandoc installed. Non essential).
 
 You can also create new zettels by invoking find and then typing a title which
 produces no find results (or if you can't do that, type title and press <ctrl>-n).
