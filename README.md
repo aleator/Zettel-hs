@@ -67,7 +67,12 @@ Links:
 --------------------------------------------------------------------------------
 ```
 
+# Demos
 
+These are bit random at the moment as they were meant to demonstrate uncommon features.
+I'll do more common examples later on.
+
+[Quickly select an outbound link]: https://drive.google.com/open?id=1sh5MfGlaAuV6j8PfDfaho6XpWlF2hw8V
 
 # Status
 
