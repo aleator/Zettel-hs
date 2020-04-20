@@ -401,7 +401,6 @@ main = do
             fmap (addLinks links) newZettel |> saveZettel zettelkasten
             labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
             saveZettel zettelkasten (addLinks labeledLinks <$> newOriginal)
-            printLabels labeledLinks
       pass
 
     Find mOrigin howToFind -> do
