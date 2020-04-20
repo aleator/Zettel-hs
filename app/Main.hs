@@ -354,7 +354,9 @@ main = do
 
   home <- getHomeDir
   let linkageDBFile     = home </> $(mkRelFile "zettel/.linkage.db")--TODO: Wrap this like the zettelkasten is wrapped
-  zettelkasten <- fileSystemZK (home </> $(mkRelDir "zettel")) 
+  let zettelDirectory   = (home </> $(mkRelDir "zettel"))
+  createDirIfMissing True zettelDirectory
+  zettelkasten <- fileSystemZK zettelDirectory 
                     |> setAutoStoreLinkage linkageDBFile
   let indexDir     = home </> $(mkRelDir "zettel/.zettel_index")--TODO: Wrap this like the zettelkasten is wrapped
   let metaDB       = home </> $(mkRelFile "zettel/.meta_db")--TODO: Wrap this like the zettelkasten is wrapped
