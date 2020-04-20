@@ -79,7 +79,7 @@ endfunction
 function! ZettelOutbound(origin)
     let g:zettel_start_buffer = bufnr('%')
      new
-    call termopen('Zettel neighbourhood --outbound ' . a:origin . " | fzf -d '-' --multi --with-nth 6.. --preview 'zettel body --origin {}' " . g:launch_vim ,{'on_exit':'MyExitFunction'})
+    call termopen('Zettel neighbourhood --outbound ' . a:origin . " | fzf -d '-' --multi --with-nth 6.. --preview 'Zettel body --origin {}' " . g:launch_vim ,{'on_exit':'MyExitFunction'})
     let g:zettel_buffer = bufnr('%')
     call feedkeys('i')
 endfunction
@@ -166,8 +166,8 @@ function! MyExitFunction(a,exit_code,c)
 endfunction 
 
 let g:launch_vim    = "|xargs nvr -o"
-let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' " . g:launch_vim
-" let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'zettel body --origin {}' | xargs nvr -o"
+let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'Zettel body --origin {}' " . g:launch_vim
+" let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'Zettel body --origin {}' | xargs nvr -o"
 
 function! ZettelBacklinks(origin)
     new
@@ -206,7 +206,7 @@ endfunction
 
 function! ZettelFill(origin)
     write
-    call system('zettel auto-fill --target ' . a:origin)
+    call system('Zettel auto-fill --target ' . a:origin)
     edit
 endfunction
 
@@ -215,7 +215,7 @@ command! -nargs=0 ZFill call ZettelFill(expand('%:t'))
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
 command! -nargs=1 Zext call ZExtend(expand("%:t"),<q-args>)
-command! -nargs=0 ZTreeView :term zettel neighbourhood --human --tree %:t 
+command! -nargs=0 ZTreeView :term Zettel neighbourhood --human --tree %:t 
 
 nmap <localleader>zr :call ZResolve()<CR>
 nmap <localleader>ze :call ZExtend(expand("%:t"),input('Note title> '))<CR>
