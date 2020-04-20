@@ -240,7 +240,7 @@ autocmd!
 autocmd BufRead */zettel/* syn keyword Todo QUESTION TODO
 autocmd BufRead */zettel/* syn keyword Keyword Tags Links 
 autocmd BufRead */zettel/* highlight ZInlineCode guifg=green
-autocmd BufRead */zettel/* :!zettel touch --open --target %:t
+autocmd BufRead */zettel/* :!Zettel touch --open --target %:t
 " Match a zettelkasten wikilink
 autocmd BufRead */zettel/* syn match Comment /\[.\{-}\]/ 
 autocmd BufRead */zettel/* syn match Comment /\*.*\*/ 
