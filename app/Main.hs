@@ -406,9 +406,7 @@ main = do
             labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
             let labels = T.intercalate " ," [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
             saveZettel zettelkasten 
-                       (replacePlaceholder (Placeholder placeholder) labels 
-                        <$> addLinks labeledLinks 
-                        <$> zettel)
+                       (addLinks labeledLinks <$> zettel)
       pass
 
     Find mOrigin howToFind -> do
