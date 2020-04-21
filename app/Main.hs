@@ -384,25 +384,31 @@ main = do
                         pure labeled
 
       case searchResults of
-        Links theLinks -> case maybeReference of
-                           No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
-                           Use ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
-                           Auto placeholder   -> do
-                                        labeledLinks <- askForLabels theLinks 
-                                        let labels = T.intercalate " ,"
-                                                     [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
-                                        saveZettel zettelkasten 
-                                            (replacePlaceholder (Placeholder placeholder)
-                                                                labels 
-                                             <$> addLinks labeledLinks 
-                                             <$> zettel)
-                                        
+        Links theLinks -> 
+            case maybeReference of
+                 No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
+                 Use ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
+                 Auto placeholder   -> do
+                              labeledLinks <- askForLabels theLinks 
+                              let labels = T.intercalate " ,"
+                                           [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+                              saveZettel zettelkasten 
+                                  (replacePlaceholder (Placeholder placeholder)
+                                                      labels 
+                                   <$> addLinks labeledLinks 
+                                   <$> zettel)
+                              
         CreateNew title links  -> do
+            -- TODO: Bug: This doesn't respect maybeReference
             original <- loadZettel zettelkasten (toText origin)
             (newOriginal,newZettel) <- createLinked original Nothing Nothing title
             fmap (addLinks links) newZettel |> saveZettel zettelkasten
             labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
-            saveZettel zettelkasten (addLinks labeledLinks <$> newOriginal)
+            let labels = T.intercalate " ," [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+            saveZettel zettelkasten 
+                       (replacePlaceholder (Placeholder placeholder) labels 
+                        <$> addLinks labeledLinks 
+                        <$> zettel)
       pass
 
     Find mOrigin howToFind -> do

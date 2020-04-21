@@ -50,12 +50,12 @@ endfunction
 
 function! ZFindWikiLink(origin, ...)
  execute 'normal!"zyi['
- let g:zettel_start_buffer = bufnr('%')
  new
-	if a:0 > 0 
+ let g:zettel_start_buffer = bufnr('%')
+ if a:0 > 0 
         " echomsg("Zettel link --origin " . a:origin . " --search " . a:1 . " --reference " . @z)
         call termopen("Zettel link --origin " . a:origin . " --search " . a:1 . " --reference " . @z ,{'on_exit':'MyExitFunction'})
-    else
+ else
         " echomsg("Zettel link --origin " . a:origin . " --reference " . shellescape(@z))
         call termopen("Zettel link --origin " . a:origin . " --reference " . shellescape(@z), {'on_exit':'MyExitFunction'})
     end
@@ -151,21 +151,23 @@ function! MyExitFunctionWithAppend(a,exit_code,c)
  let g:zettel_input = ""
  write
 endfunction 
-
+ 
+ " <# MyExitFunction callback #>
 function! MyExitFunction(a,exit_code,c)   
  " echomsg('zb' . g:zettel_buffer . "EC" . a:exit_code)
  if a:exit_code == 0
-  let currwin=winnr()
-  windo edit
-  execute currwin . 'wincmd w'
-  if bufnr('%') == g:zettel_buffer 
-      execute 'bp'
-  endif
+ " let currwin=winnr()
+ " windo edit
+ " execute currwin . 'wincmd w'
+ " if bufnr('%') == g:zettel_buffer 
+ "     execute 'bp'
+ " endif
   execute 'bd! ' . g:zettel_buffer 
+  edit
  endif
 endfunction 
 
-let g:launch_vim    = "|xargs nvr -o"
+let g:launch_vim    = "|xargs nvr"
 let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'Zettel body --origin {}' " . g:launch_vim
 " let g:fzf_xargs_vim = "| fzf -d '-' --with-nth 6.. --multi --preview 'Zettel body --origin {}' | xargs nvr -o"
 
@@ -179,9 +181,10 @@ function! ZettelBacklinks(origin)
 endfunction
 
 function! ZettelThread(origin)
-     new
-    call termopen("Zettel neighbourhood --thread " . a:origin . g:fzf_xargs_vim , {'on_exit':'MyExitFunction'})
+    new
     let g:zettel_buffer = bufnr('%')
+
+    call termopen("Zettel neighbourhood --thread " . a:origin . g:fzf_xargs_vim , {'on_exit':'MyExitFunction'})
     call feedkeys("i")
 endfunction
 
