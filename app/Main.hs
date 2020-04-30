@@ -374,50 +374,36 @@ main = do
     AddLinks origin maybeReference maybeSearch -> do
       zettel   <- loadZettel zettelkasten (toText origin)
       searchResults <- keywordSearch zettelkasten maybeSearch
-      let askForLabels theLinks = do 
+      let getLabelsForLinks theLinks = do 
                         zettels <- listZettels zettelkasten
                         links <- getLinkStructure zettelkasten zettels
-                        let getLabelFor (Link linkTarget desc ref) = do
-                                title <- loadZettel zettelkasten linkTarget
-                                          >>= namedValue .> title .> pure
-                                lbl <- findLabelsFor links linkTarget 
-                                    >>= (title:)
-                                        .> filter (/="") 
-                                        .> filter (/="Origin")
-                                        .> ordNub 
-                                        .> selectLabels
-                                            
-                                pure (Link linkTarget desc (Just lbl))
-                        labeled <- traverse getLabelFor theLinks 
+                        labeled <- traverse ( askForLabels zettelkasten links ) theLinks 
                         pure labeled
+      let insertLinks :: [Link] -> Named Zettel -> IO (Named Zettel) 
+          insertLinks theLinks
+             = case maybeReference of
+                          No      -> fmap (addLinks theLinks) .> pure 
+                          Use ref -> fmap (addLinks (map (addRefId ref) theLinks)) .> pure 
+                          Auto placeholder   -> \zettel -> do
+                                        labeledLinks <- getLabelsForLinks theLinks 
+                                        let labels = T.intercalate " ,"
+                                                     [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+                                        pure (replacePlaceholder (Placeholder placeholder) labels 
+                                             <$> addLinks labeledLinks 
+                                             <$> zettel)
 
       case searchResults of
         Links theLinks -> 
-            case maybeReference of
-                 No      -> addLinks theLinks <$> zettel |> saveZettel zettelkasten
-                 Use ref -> addLinks (map (addRefId ref) theLinks) <$> zettel |> saveZettel zettelkasten
-                 Auto placeholder   -> do
-                              labeledLinks <- askForLabels theLinks 
-                              let labels = T.intercalate " ,"
-                                           [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
-                              putTextLn labels
-                              saveZettel zettelkasten 
-                                  (replacePlaceholder (Placeholder placeholder)
-                                                      labels 
-                                   <$> addLinks labeledLinks 
-                                   <$> zettel)
+            insertLinks theLinks zettel >>= saveZettel zettelkasten
                               
         CreateNew title links  -> do
             -- TODO: Bug: This doesn't respect maybeReference
             original <- loadZettel zettelkasten (toText origin)
-            (newOriginal,newZettel) <- createLinked original Nothing Nothing title
+            -- Create and file the new zettel
+            newZettel <- create title
             fmap (addLinks links) newZettel |> saveZettel zettelkasten
-            labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
-            let labels = T.intercalate " ," [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
-            putTextLn labels
-            saveZettel zettelkasten 
-                       (addLinks labeledLinks <$> zettel)
-      pass
+
+            insertLinks [Link (name newZettel) mempty mempty] original >>= saveZettel zettelkasten 
 
     Find mOrigin howToFind -> do
       searchResults <- case howToFind of

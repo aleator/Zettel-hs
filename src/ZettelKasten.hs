@@ -61,6 +61,19 @@ fileSystemLinkToFile baseDir (Link lnk _ _) = do
 
 writeZettel :: Path Abs File -> Zettel -> IO ()
 writeZettel n z = writeFileText (toFilePath n) (pprZettel z)
+      
+askForLabels :: ZettelKasten -> LinkStructure -> Link -> IO Link
+askForLabels zettelkasten linkStructure (Link linkTarget desc ref) = do
+        title <- loadZettel zettelkasten linkTarget >>= namedValue .> title .> pure
+        lbl <-
+          findLabelsFor linkStructure linkTarget
+          >>= (title :)
+          .>  filter (/= "")
+          .>  filter (/= "Origin")
+          .>  ordNub
+          .>  selectLabels
+
+        pure (Link linkTarget desc (Just lbl))
 
 fzf inputPipe 
  = let
