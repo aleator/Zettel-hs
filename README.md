@@ -34,6 +34,7 @@ Available commands:
   addreferences            Add references to a Zettel
   auto-fill                Fill missing wikilinks and references from origin
   touch                    Record opening a zettel (for logging purposes)
+  rescan                   Rebuild link databases
 ```
 
 For further details, pass `--help` as argument for each command (e.g., `Zettel link --help`)

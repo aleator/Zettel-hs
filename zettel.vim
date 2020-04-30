@@ -49,6 +49,8 @@ endfunction
 "endfunction
 
 function! ZFindWikiLink(origin, ...)
+ write
+ let @z=''
  execute 'normal!"zyi['
  new
  let g:zettel_start_buffer = bufnr('%')

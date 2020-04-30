@@ -47,6 +47,7 @@ import qualified Data.Aeson                    as Aeson
 -- TODO: Move tantify stuff to it's own file
 
 
+-- <# Commands #>
 data Commands
   = AddLinks FilePath (AutoMaybe Text Text) (Maybe Text)
   | Find (Maybe Text) HowToFind
@@ -61,6 +62,7 @@ data Commands
   | Elucidate
   | FillLabels Text
   | Touch TouchType Text
+  | Rescan  
   deriving (Eq, Show)
 
 data TouchType = TouchOpen deriving (Eq,Show)
@@ -313,11 +315,16 @@ cmdTouch =
     <$> flag' TouchOpen (long "open" <> help "Call when opening a zettel")
     <*> strOption (long "target" <> metavar "ZETTEL" <> help
                   "Zettel to try to autofill labels for"
-                )
+                  )
+ 
+cmdRescan :: Parser Commands
+cmdRescan =
+    pure Rescan
 
 --TODO, BUG: IF rg does not find anything, fzf is launched empty and error is printed
 --
 
+-- <# Main subcommand list #>
 cmdCommands :: Parser Commands
 cmdCommands = subparser
   (  cmd cmdCreate   "create" "Create unlinked zettel"
@@ -335,6 +342,7 @@ cmdCommands = subparser
 --  <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
   <> cmd cmdFillLabels "auto-fill" "Fill missing wikilinks and references from origin"
   <> cmd cmdTouch "touch" "Record opening a zettel (for logging purposes)"
+  <> cmd cmdRescan "rescan" "Rebuild link databases"
   )
  where
   cmd theCmd name desc =
@@ -392,6 +400,7 @@ main = do
                               labeledLinks <- askForLabels theLinks 
                               let labels = T.intercalate " ,"
                                            [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+                              putTextLn labels
                               saveZettel zettelkasten 
                                   (replacePlaceholder (Placeholder placeholder)
                                                       labels 
@@ -405,6 +414,7 @@ main = do
             fmap (addLinks links) newZettel |> saveZettel zettelkasten
             labeledLinks <- askForLabels [Link (name newZettel) Nothing Nothing]
             let labels = T.intercalate " ," [ pprLabel rn | Link _ _ (Just rn) <- labeledLinks ]
+            putTextLn labels
             saveZettel zettelkasten 
                        (addLinks labeledLinks <$> zettel)
       pass
@@ -580,8 +590,16 @@ main = do
         fillMissingLinks zettelkasten zettel >>= saveZettel zettelkasten
 
     Touch TouchOpen zettelName -> do
-        conn <- createHistoryDB metaDB
-        recordOpenZettel conn zettelName
+        connHist <- createHistoryDB metaDB
+        connLink <- createLinkageDB linkageDBFile
+        refreshLinks connLink <$> loadZettel zettelkasten zettelName
+        recordOpenZettel connHist zettelName
+
+    Rescan -> do
+        allZettels <- listZettels zettelkasten
+        connLink <- createLinkageDB linkageDBFile
+        for_ allZettels <| \link -> do 
+            refreshLinks connLink <$> loadZettel zettelkasten (linkTarget link)
 
 
 readZettelFromNameOrFilename zettelkasten zettelNameOrFilename =
