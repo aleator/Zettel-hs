@@ -27,6 +27,7 @@ library
   hs-source-dirs:
       src
   extensions: OverloadedStrings
+  ghc-options: -fwarn-unused-imports -Werror=incomplete-patterns -Wall -fno-warn-name-shadowing
   build-depends:
       base-noprelude >=4.7 && <5
     , flow
@@ -52,6 +53,7 @@ executable Zettel
   hs-source-dirs:      app
   main-is:             Main.hs
   extra-source-files:  tantivy_meta.json
+  ghc-options: -fwarn-unused-imports -Werror=incomplete-patterns -Wall -fno-warn-name-shadowing
   extensions: OverloadedStrings
   default-language:    Haskell2010
   build-depends:       base-noprelude >= 4.7 && < 5

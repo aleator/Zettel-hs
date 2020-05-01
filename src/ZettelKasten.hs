@@ -7,16 +7,11 @@ import Path.IO
 import           System.Process.Typed
 import qualified Data.HashSet                  as HashSet
 import qualified Data.HashMap.Strict           as HashMap
-import           Data.HashMap.Strict (HashMap)
-import           Data.HashSet (HashSet)
 import qualified Data.Text.Lazy                as LT
 import qualified Data.Text.Lazy.IO             as LT
 import qualified Data.Text.Lazy.Encoding       as LT
-import qualified Data.Text.Encoding            as T
 import qualified Data.ByteString.Lazy          as LBS
-import System.Exit
 
-import Operations 
 import Zettel 
 import Parser(runZettelParser)
 

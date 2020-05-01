@@ -1,15 +1,12 @@
 {-#LANGUAGE DeriveGeneric#-}
 {-#LANGUAGE OverloadedStrings#-}
 {-#LANGUAGE DeriveAnyClass#-}
+{-#OPTIONS_GHC -fno-warn-unused-do-bind#-}
 module Parser where
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
-import qualified Data.Text.IO                  as T
-import           Data.Void
 import qualified Data.Char                     as Char
-import qualified Data.Aeson as Aeson
 
 import           System.Directory
 
@@ -19,6 +16,7 @@ parseSeparator :: Parsec Void Text ()
 parseSeparator = try ((separatorLine <?> "Ascii section separator") $> ())
   <|> try ((unicodeSeparatorLine <?> "Unicode section separator") $> ())
 
+isReferenceLine, isSeparatorLine :: (Eq a, IsString a) => a -> Bool
 isReferenceLine x = x == unicodeReferenceLine || x == referenceLine
 isSeparatorLine x = x == unicodeSeparatorLine || x == separatorLine
 
@@ -55,6 +53,7 @@ parseTags = do
 linespace :: Parsec Void Text ()
 linespace = skipMany (satisfy nonLinebreakingSpace)
 
+nonLinebreakingSpace :: Char -> Bool
 nonLinebreakingSpace c = Char.isSpace c && c /= '\n' -- TODO: Other linebreaks?
 
 word :: String -> Parsec Void Text Text
@@ -92,22 +91,25 @@ refId = try <| do
 labelSoup :: Parsec Void Text [Either Text Label]
 labelSoup = do
     start <- takeWhileP Nothing (/='[')
-    label <- try $ optional $ do
+    labelName <- try $ optional $ do
                          (Right <$> refLabel) <|> ("["*>pure (Left "["))
-    rest <- if T.null start && isNothing label 
+    rest <- if T.null start && isNothing labelName
                 then pure []
                 else labelSoup
-    pure <| maybe (Left start:rest) (\x -> Left start:x:rest) label --pure (Left start:label:rest)
+    pure <| maybe (Left start:rest) (\x -> Left start:x:rest) labelName
 
 
+parseLinks :: ParsecT Void Text Identity [Link]
 parseLinks = 
   "Links:" *> linespace *> newline *> Text.Megaparsec.many (link)
 
+emptyLine :: ParsecT Void Text Identity ()
 emptyLine = try (linespace <* newline)
 
+link :: ParsecT Void Text Identity Link
 link = do
   ref  <- optional refId
-  link <- try (linkWord "Link")
+  linkName <- try (linkWord "Link")
 
   desc <- do
     onSameLine       <- (takeWhileP (Just "Link description") (/= '\n'))
@@ -122,8 +124,9 @@ link = do
         Just thelines               -> unlines (onSameLine : thelines) |> Just |> pure
 
   Text.Megaparsec.many newline
-  pure (Link link (fmap T.strip desc) ref)
+  pure (Link linkName (fmap T.strip desc) ref)
 
+singleLineRef :: ParsecT Void Text Identity BibItem
 singleLineRef = do
     ri <- refId
     line1 <- parseLine
@@ -132,9 +135,9 @@ singleLineRef = do
 multilineRef = do
     ri <- refId
     line1 <- parseLine
-    lines <- Text.Megaparsec.many parseIndentedLine
+    refLines <- Text.Megaparsec.many parseIndentedLine
     skipMany emptyLine
-    pure (BibItem ri (unlines (line1:lines)))
+    pure (BibItem ri (unlines (line1:refLines)))
 
 runTheParser :: FilePath -> Text -> Parsec Void Text a 
                 -> Either String a
@@ -160,9 +163,9 @@ textChunks originFile input
 
 zettel :: Parsec Void Text Zettel
 zettel = do
-  title <- (parseLine <?> "titleLine") <* parseSeparator <* newline
+  titleText <- (parseLine <?> "titleLine") <* parseSeparator <* newline
   skipMany emptyLine
-  body <- optional 
+  zettelBody <- optional 
     (unlines <$> Text.Megaparsec.some (try parseLine <|> (newline $> "")))
 
   -- references
@@ -173,17 +176,18 @@ zettel = do
   
   -- meta
   parseSeparator<*newline
-  tags <- parseTags
+  zettelTags <- parseTags
   newline
-  links <- parseLinks
+  zettelLinks <- parseLinks
   skipMany emptyLine
   parseSeparator
 
   space
   takeRest
-  pure (Zettel title (fromMaybe "" body) (fromMaybe [] refs) tags links)
+  pure (Zettel titleText (fromMaybe "" zettelBody) (fromMaybe [] refs) zettelTags zettelLinks)
 
                 
+tst :: IO ()
 tst = do
   files' <- listDirectory "/Users/aleator/zettel/"
   let files = filter (not . ("." `isPrefixOf`)) files'
@@ -192,7 +196,7 @@ tst = do
   mapM_
     (\(n, x) -> case parse zettel n x of
       Left  e -> putStrLn (errorBundlePretty  e)
-      Right v -> --putTextLn (pprZettel v)
+      Right _ -> --putTextLn (pprZettel v)
                  pass
     )
     (zip files ts)

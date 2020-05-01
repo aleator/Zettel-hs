@@ -1,7 +1,6 @@
 module Meta.Linkage where
 import qualified Database.SQLite.Simple as SQL
 import           Path
-import           Data.Time.Clock
 import           Zettel
 
 createLinkageDB :: Path Abs File -> IO SQL.Connection

@@ -215,13 +215,14 @@ function! ZettelFill(origin)
     edit
 endfunction
 
+" <# Commands #>
 command! -nargs=0 ZFill call ZettelFill(expand('%:t'))
 " :w|!zettel auto-fill --target %:t
 command! -nargs=1 Zlnk call ZettelLink(expand("%:t"),<q-args>)
 command! -nargs=1 Zf call ZettelFullFind(<q-args>)
 command! -nargs=1 Zext call ZExtend(expand("%:t"),<q-args>)
 command! -nargs=0 ZTreeView :term Zettel neighbourhood --human --tree %:t 
-
+" <# Mappings #>
 nmap <localleader>zr :call ZResolve()<CR>
 nmap <localleader>ze :call ZExtend(expand("%:t"),input('Note title> '))<CR>
 vmap <localleader>zs :<c-u>call ZettelSplit(expand('%:t'))<CR>

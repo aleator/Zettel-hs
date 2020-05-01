@@ -1,4 +1,5 @@
-{-OPTIONS_GHC -Werror=incomplete-patterns-}
+{-# OPTIONS_GHC -Werror=incomplete-patterns #-}
+{-# OPTIONS_GHC -fwarn-unused-imports #-}
 {-#language OverloadedStrings#-}
 {-#language LambdaCase#-}
 {-#language TupleSections#-}
@@ -24,7 +25,6 @@ import           Data.Tree
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.IO             as LT
 import qualified Data.Text.IO                  as T
-import qualified Data.Char                     
 import qualified Data.CaseInsensitive          as CI
 import           Data.Time.Clock
 import           Path
@@ -35,16 +35,16 @@ import qualified Data.ByteString.Lazy.Char8    as Char8
 import           Control.Exception
 import qualified Data.HashMap.Strict           as HashMap
 import qualified Data.HashSet                  as HashSet
-import           Data.HashSet (HashSet)
 import qualified Data.Foldable as F
 
 -- For elucidate
 import qualified Numeric.Sampling 
 import qualified Database.SQLite.Simple as SQL
-import qualified Database.SQLite.Simple.FromRow as SQL
 
 import qualified Data.Aeson                    as Aeson
 -- TODO: Move tantify stuff to it's own file
+
+{-# ANN module ("HLint: ignore Redundant bracket" :: Text) #-}
 
 
 -- <# Commands #>
@@ -58,7 +58,7 @@ data Commands
   -- | Thread Text
   | Body Text
   | References Text
-  | AddReferences Text (Target BibItem)
+  -- | AddReferences Text (Target BibItem)
   | Elucidate
   | FillLabels Text
   | Touch TouchType Text
@@ -98,7 +98,7 @@ data CreateLinks = DontAddLinks | DoAddLinks | AddLinksKeyword Text
 
 argChooseFrom :: Parser ChooseFrom
 argChooseFrom = 
-    (flag' AllZettels (long "all-zettels" <> help "Select all zettels"))
+    flag' AllZettels (long "all-zettels" <> help "Select all zettels")
     <|>
     (FromNeighbourhood 
         <$> strOption (long "neighbourhood" <> help "Select neighbourhood of this zettel" <> metavar "ZETTEL"))
@@ -202,6 +202,7 @@ cmdReferences =
     <$> strOption
           (long "origin" <> help "Zettel from which to extract references from" <> metavar "ZETTEL")
 
+{-
 cmdAddReferences :: Parser Commands
 cmdAddReferences =
   AddReferences
@@ -219,7 +220,7 @@ cmdAddReferences =
                     (long "reference"<> help "Add this reference"
                             <> metavar "REFERENCE")))
             )
-
+-}
 
 
 cmdNeighbourhood :: Parser Commands
@@ -338,8 +339,7 @@ cmdCommands = subparser
   <> cmd cmdNeighbourhood "neighbourhood" "Zettels linkwise near to this one"
   <> cmd cmdBody "body" "Extract zettel body, ie. text without headers and links"
   <> cmd cmdReferences "references" "Extract references from a Zettel"
-  <> cmd cmdAddReferences "addreferences" "Add references to a Zettel"
---  <> cmd cmdThread "thread" "Compute the transitive origin of a Zettel"
+--  <> cmd cmdAddReferences "addreferences" "Add references to a Zettel"
   <> cmd cmdFillLabels "auto-fill" "Fill missing wikilinks and references from origin"
   <> cmd cmdTouch "touch" "Record opening a zettel (for logging purposes)"
   <> cmd cmdRescan "rescan" "Rebuild link databases"
@@ -377,8 +377,8 @@ main = do
       let getLabelsForLinks theLinks = do 
                         zettels <- listZettels zettelkasten
                         links <- getLinkStructure zettelkasten zettels
-                        labeled <- traverse ( askForLabels zettelkasten links ) theLinks 
-                        pure labeled
+                        traverse ( askForLabels zettelkasten links ) theLinks 
+
       let insertLinks :: [Link] -> Named Zettel -> IO (Named Zettel) 
           insertLinks theLinks
              = case maybeReference of
@@ -584,7 +584,7 @@ main = do
     Rescan -> do
         allZettels <- listZettels zettelkasten
         connLink <- createLinkageDB linkageDBFile
-        for_ allZettels <| \link -> do 
+        for_ allZettels <| \link -> 
             refreshLinks connLink <$> loadZettel zettelkasten (linkTarget link)
 
 
@@ -626,7 +626,7 @@ tantivySetupIndex indexDir = do
   writeFileBS (toFilePath (indexDir</> $(mkRelFile "meta.json"))) 
               $(embedFile "tantivy_meta.json")
 
-tantivyBuildIndex zettelkasten indexDir = do
+tantivyBuildIndex zettelkasten indexDir = 
   withProcessWait_
     (proc "tantivy" ["index","-i", toFilePath indexDir] 
         |> setStdin createPipe
@@ -677,9 +677,9 @@ originTree' visited linkStructure zettelName
                    | backlinker <- HashSet.toList 
                                    (mLookup zettelName (hasLinkFrom linkStructure))
                    , "Origin" `HashSet.member`
-                         (mLookup
+                         mLookup
                              (backlinker,zettelName)
-                             (linkLabel linkStructure))
+                             (linkLabel linkStructure)
                    , not (backlinker `HashSet.member` visited)
                    ]
        visitedNow = visited <> HashSet.fromList backlinks 
@@ -695,7 +695,7 @@ originChain zettelkasten zettelName =
                     Nothing -> pure acc
                     Just origin     
                         -- Let's not loop if there is a cycle:
-                        | (origin) `elem` acc -> pure acc
+                        | origin `elem` acc -> pure acc
                         | otherwise         -> loop (origin:acc) (linkTarget origin)
         in loop [] zettelName >>= reverse .> pure 
 

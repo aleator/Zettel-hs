@@ -12,8 +12,6 @@ import Data.Char
 import Data.Time.Clock 
 import Data.Time.LocalTime 
 import Data.Time.Calendar 
-import Data.Text (Text)
-import Data.Char
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text as T
 import qualified Data.Aeson.Text as Aeson
@@ -23,21 +21,24 @@ import System.Random
 
 
 
+linkTo :: Named a -> Link
 linkTo named = Link (name named) Nothing Nothing
 
-maulToFilename title = 
+maulToFilename :: Text -> Path Rel File
+maulToFilename text = 
    let  noSpace x 
             | isSpace x = '-'
             | x == '/'  = '_'
             | not (isAlphaNum x || '-' == x) = '_'
             | otherwise = toLower x
-  in case parseRelFile (Prelude.toString (T.map noSpace title)) of 
+  in case parseRelFile (Prelude.toString (T.map noSpace text)) of 
                    Right aPath 
                     | parent aPath == $(mkRelDir ".")
                         -> aPath
                     | otherwise -> error ("Cannot create a title that isn't a valid filepath")    
                    Left e -> error (show e) -- TODO Exception!
 
+junkAlphabet :: [Char]
 junkAlphabet =
     "0123456789" -- ABCDEFGHIJKLMNOPQRSTUVWXYZ"
      ++ [chr n | n <- [0x2190..0x2199] ++ [0x1900 ..0x191E] ++ [0x0F50 .. 0x0F6C] ] -- ++[0x21B0..0x21B7]++[0x27F0..0x27FF]]
@@ -65,6 +66,7 @@ mkName title = do
         | between 11 13 = "midday"
         | between 13 18 = "afternoon"
         | between 18 24 = "evening"
+        | otherwise     = "outside_time"
    junk <- generate (cycle junkAlphabet) 2
    let uuid =   show year  <>"-"
              <> show month <>"-"

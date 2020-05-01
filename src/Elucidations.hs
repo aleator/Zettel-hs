@@ -5,16 +5,11 @@
 module Elucidations where
 
 import qualified Data.Text                     as T
-import qualified Data.HashSet                  as HashSet
 
 import Zettel
-import Operations
 import ZettelKasten
 
-import Data.Proxy
-
 import qualified Data.HashMap.Strict           as HashMap
-import           Data.HashMap.Strict (HashMap)
 
 import Crypto.Hash.SHA256
 import qualified Data.Text.Encoding                     as T

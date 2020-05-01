@@ -45,7 +45,7 @@ pprZettel zettel =
     <> "Links: "
     <> "\n"
     <> unlines
-         [  maybe "" (\ref -> "["<>ref<>"]: ") ref
+         [  maybe "" (\theref -> "["<>theref<>"]: ") ref
             <> maybe lnk (\d -> lnk <> " " <> d) desc <> "\n"
          | Link lnk desc ref <- links zettel
          ]
