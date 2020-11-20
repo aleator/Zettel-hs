@@ -459,12 +459,17 @@ main = do
 
     ResolveReference resolveMissing zettelID reference -> do
         zettel <- loadZettel zettelkasten zettelID
-        let matches = [ lnk | lnk@(Link _ _ (Just refId)) <- links (namedValue zettel)
+        let 
+            matches = [ lnk | lnk@(Link _ _ (Just refId)) <- links (namedValue zettel)
                             , CI.mk refId == CI.mk reference ]
         case matches of
             [singularLink] -> printLink zettelkasten singularLink 
             manyLinks@(_:_) -> traverse_ (printLink zettelkasten) manyLinks
-            []    -> do
+            []    -> case resolveMissing of
+                        ReturnError -> 
+                          errorExit <| "Could not find link to label " <> reference <> " in " <> zettelID
+                                        <> "\n" <> "Found only: " <> show (links (namedValue zettel))
+                        CreateNewByRefID -> do
                           (modifiedOriginal, created) <- createLinked zettel
                                                                       (Just reference)
                                                                       Nothing
@@ -534,8 +539,22 @@ main = do
 
             FromBackLinks zettelName -> do
                 conn <- createLinkageDB linkageDBFile
-                findBacklinks conn zettelName >>=
-                    traverse_ (asLink .> printLink zettelkasten)
+                -- TODO: This should go somewhere else
+                --let findContext backlinkerName = do
+                --     backlinker <- loadZettel zettelkasten zettelName 
+                --     let possibleLabels = [ refNo lnk | lnk <- namedValue backlinker |> links
+                --                                      , linkTarget lnk == zettelName ]
+                --         contexts = getLabelsWithShortContext (namedValue backlinker |> body)
+                --                    |> filter (\(l,_,_) -> l `elem` possibleLabels)
+                --     pure (backlinkerName, contexts)
+                --let pprContext (label, before, after) = before<>" "<>label<>" "<>after
+                --    padWithTo c n x = T.replicate (n-length x) c
+                --    pprBacklinker (linkerName,contexts) 
+                --        = unlines (("── "<>linkerName<>" " |> padWithTo "─" 80):map pprContext contexts)
+                backlinks <- findBacklinks conn zettelName 
+                case forWho of
+                    _ -> traverse_ (asLink .> printLink zettelkasten) backlinks
+                    -- Human    -> traverse_ (findContext .> map pprBacklinker .> unlines .> putTextLn) backlinks
 
             FromRecent min -> do
                 c <- createHistoryDB metaDB
@@ -709,6 +728,7 @@ neighbourhood links (LS thisLinksTo thisHasLinkFrom _) zettelName =
                      mLookup linkingZettel thisLinksTo 
     in (linkedFrom,siblings)
 
+fillMissingLinks :: ZettelKasten -> Named Zettel -> IO (Named Zettel)
 fillMissingLinks zettelkasten zettel =
   let labels = getPotentialLabels zettel
   in  if null labels

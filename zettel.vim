@@ -70,9 +70,12 @@ function! ZPopSplit(name)
 endfunction
 
 function! ZResolve()
+ write
  execute 'normal!"zyi['
  "echomsg('Zettel resolve --create --origin ' . expand('%:t') . " -r '" . shellescape(@z) . "'")
- let l:name = system('Zettel resolve --create --origin ' . expand('%:t') . " -r " . shellescape(@z) ) "TODO: USE SYSTEMLIST to open all files
+ let l:cmd = ('Zettel resolve --create --origin ' . expand('%:t') . " -r " . shellescape(@z))
+ echomsg(l:cmd)
+ let l:name = system(cmd) "TODO: USE SYSTEMLIST to open all files
  edit
  echo
     call ZPopSplit(l:name)
@@ -201,7 +204,7 @@ function! ZettelLink(origin)
     execute "normal! i[PLACEHOLDER]"
     write
     new
-    let l:cmd = ("Zettel link --ask --placeholder '[PLACEHOLDER]' --origin " . shellescape(a:origin) . ' | xargs -I {} nvr -c"call AddZInput(''{}'')"')
+    let l:cmd = ("Zettel link --ask --placeholder '[PLACEHOLDER]' --origin " . shellescape(a:origin) )
     " echomsg(l:cmd)
     call termopen(l:cmd,{'on_exit':'MyExitFunction'})
     end

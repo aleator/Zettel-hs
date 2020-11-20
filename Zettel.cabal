@@ -24,6 +24,8 @@ library
      , Meta.History
      , Meta.Linkage
      , Zettel
+  ghc-options:       -fwrite-ide-info
+                     -hiedir=.hie
   hs-source-dirs:
       src
   extensions: OverloadedStrings

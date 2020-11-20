@@ -47,11 +47,18 @@ pprZettel zettel =
     <> unlines
          [  maybe "" (\theref -> "["<>theref<>"]: ") ref
             <> maybe lnk (\d -> lnk <> " " <> d) desc <> "\n"
-         | Link lnk desc ref <- links zettel
+         | Link lnk desc ref <- linksWithLabels 
          ]
     <> unicodeSeparatorLine
    where 
      pprRefs = map pprBib .> unlines
+     linksWithLabels = zipWith ensureLink unusedLabels zettelsLinks
+        where
+            zettelsLinks = links zettel
+            ensureLink defRef (Link lnk desc Nothing) = Link lnk desc (Just defRef)
+            ensureLink _ other = other
+            unusedLabels = filter (\label -> not <| (Just label `elem` (map refNo zettelsLinks)))
+                                  (map show [1 :: Int ..])
 
 pprBib :: BibItem -> Text
 pprBib (BibItem ref txt) = "["<>ref<>"]: "<>T.strip txt

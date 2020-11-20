@@ -76,7 +76,7 @@ refLabel = try <| do
     (\c ->
       Char.isAlphaNum c 
       || nonLinebreakingSpace c 
-      || elem c ("#-,'\"?!:;<>." :: [Char])
+      || elem c ("#-_,'\"?!:;<>." :: [Char])
     ) --TODO
   "]"
   pure w
@@ -87,6 +87,16 @@ refId = try <| do
   linespace
   pure w
 
+
+getLabelContexts :: [Either Text Label] -> [(Label,Text,Text)]
+getLabelContexts [] = []
+getLabelContexts (Left _:[]) = []
+getLabelContexts (Left _:rest@(Left _:_)) = getLabelContexts rest 
+getLabelContexts [Right l] = [(l,"","")]
+getLabelContexts (Right l:rest@(Right _:_) ) = (l,"",""):getLabelContexts rest
+getLabelContexts (Right l:Left r:rest ) = (l,"",r):getLabelContexts rest
+getLabelContexts (Left l:Right m:Left r :xs) = (m,l,r):getLabelContexts xs
+getLabelContexts (Left l:Right m:rest) = (m,l,""):getLabelContexts rest
 
 labelSoup :: Parsec Void Text [Either Text Label]
 labelSoup = do
@@ -132,6 +142,7 @@ singleLineRef = do
     line1 <- parseLine
     pure (BibItem ri line1)
 
+multilineRef :: ParsecT Void Text Identity BibItem
 multilineRef = do
     ri <- refId
     line1 <- parseLine

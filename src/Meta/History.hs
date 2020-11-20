@@ -22,9 +22,9 @@ recordOpenZettel conn zettelName = do
                 ("OPEN" :: Text, zettelName, now)
     SQL.execute conn
                 "INSERT OR IGNORE INTO TemporalRelation \
-                \SELECT ?, zettel, 1 FROM AccessLog \ 
+                \SELECT ?,zettel, 1 FROM AccessLog \ 
                 \WHERE date > ?"
-                (zettelName,addUTCTime (15*60) now)
+                (zettelName,addUTCTime (negate (15*60)) now)
     let timeUpdate time = 
           SQL.execute conn
                     "UPDATE TemporalRelation \
