@@ -27,7 +27,7 @@ packages:
     hackage: direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
 snapshots:
 - completed:
-    size: 491389
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/7.yaml
-    sha256: 92ab6303fe20ec928461c82ce0980b4d17c06f4e66205a2967e476474f686c17
-  original: lts-15.7
+    size: 534126
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/31.yaml
+    sha256: 637fb77049b25560622a224845b7acfe81a09fdb6a96a3c75997a10b651667f6
+  original: lts-16.31
